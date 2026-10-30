@@ -32,3 +32,32 @@ jobs:
         with:
           name: RenacerLuces-windows
           path: dist/RenacerLuces.exe
+
+  publicar:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: RenacerLuces-windows
+          path: out
+
+      - name: Publicar en "Releases" (descarga fija)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >
+          gh release create "build-${{ github.run_number }}" out/RenacerLuces.exe
+          --repo "${{ github.repository }}" --latest
+          --title "Renacer Luces (versión ${{ github.run_number }})"
+          --notes "Descargá RenacerLuces.exe y abrilo. No necesita instalar nada."
+
+      - name: Guardar el .exe en la rama "exe"
+        run: |
+          cd out
+          git init -q -b exe
+          git add RenacerLuces.exe
+          git -c user.name=github-actions -c user.email=41898282+github-actions[bot]@users.noreply.github.com \
+            commit -q -m "RenacerLuces.exe (versión ${{ github.run_number }})"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" exe
