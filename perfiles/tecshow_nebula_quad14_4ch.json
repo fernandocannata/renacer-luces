@@ -1,0 +1,12 @@
+{
+  "nombre": "Tecshow Nebula Quad 14 (4 canales)",
+  "tipo": "par",
+  "verificado": true,
+  "nota": "Tabla de canales del manual oficial. En el equipo: menú '4Ch'. Sin dimmer ni strobo propios: el programa los simula.",
+  "canales": [
+    {"attr": "red", "label": "Rojo"},
+    {"attr": "green", "label": "Verde"},
+    {"attr": "blue", "label": "Azul"},
+    {"attr": "white", "label": "Blanco"}
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "nombre": "Dimmer / canal simple (1 canal)",
+  "tipo": "dimmer",
+  "verificado": true,
+  "nota": "Un canal de intensidad (lámpara, tacho halógeno, luz negra, etc.).",
+  "canales": [
+    {
+      "attr": "intensity",
+      "label": "Intensidad"
+    }
+  ]
+}

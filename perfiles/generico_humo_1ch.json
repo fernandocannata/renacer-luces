@@ -1,0 +1,12 @@
+{
+  "nombre": "Máquina de humo (1 canal)",
+  "tipo": "humo",
+  "verificado": true,
+  "nota": "Canal único: 0 = apagada, 255 = máximo humo.",
+  "canales": [
+    {
+      "attr": "smoke",
+      "label": "Humo"
+    }
+  ]
+}

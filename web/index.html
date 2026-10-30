@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#16131f">
+<title>Renacer Luces</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header id="top">
+  <div id="brand"><span class="lamp"></span>Renacer Luces</div>
+  <button id="out" title="Estado de la interfaz DMX"><span class="dot"></span><span id="outLbl">Conectando…</span></button>
+
+  <div class="topgroup" title="Tempo para los efectos">
+    <span id="beat"></span><span id="bpm">120</span><span class="lbl">BPM</span>
+    <button id="btnTap" title="Tocá al ritmo de la música (tecla T)">Tap</button>
+  </div>
+  <div class="topgroup" title="Tiempo de fundido al cambiar de escena">
+    <span class="lbl">Fundido</span>
+    <input type="range" id="fade" class="mini-range" min="0" max="10" step="0.1">
+    <span id="fadeVal">1.0 s</span>
+  </div>
+  <div class="topgroup" title="Intensidad general de todas las luces">
+    <span class="lbl">Master</span>
+    <input type="range" id="master" class="mini-range" min="0" max="1" step="0.01">
+    <span id="masterVal">100%</span>
+  </div>
+
+  <div id="holds">
+    <button id="btnFlash" title="Mantener: todo blanco a full (tecla F)">Flash</button>
+    <button id="btnStrobe" title="Mantener: todo en strobo (tecla S)">Strobo</button>
+    <button id="btnHumo" title="Mantener: dispara la máquina de humo (tecla H)">Humo</button>
+    <button id="btnBlackout" title="Apaga todo hasta que lo vuelvas a tocar (tecla B)">Blackout</button>
+  </div>
+</header>
+
+<nav id="tabs">
+  <button data-view="operar" class="on">Operar</button>
+  <button data-view="patch">Equipos y direcciones</button>
+  <button data-view="probar">Probar canales</button>
+  <button data-view="show">Show y ajustes</button>
+</nav>
+
+<main>
+  <!-- ======================================================= OPERAR -->
+  <section id="operar" class="view on">
+    <div class="col">
+      <div class="colhead"><h2>Equipos</h2><span class="hint" id="selCount"></span></div>
+      <div class="chips" id="groupChips"></div>
+      <div id="tileGroups"></div>
+    </div>
+
+    <div class="col">
+      <div id="progTabs">
+        <button data-p="color" class="on">Color e intensidad</button>
+        <button data-p="pos">Posición</button>
+        <button data-p="haz">Haz</button>
+        <button data-p="fx">Efectos</button>
+      </div>
+      <div class="emptysel" id="noSel">Tocá uno o más equipos a la izquierda para programarlos. También podés elegir un grupo, como “Todos” o “Cabezales”.</div>
+
+      <div class="ppanel on" data-p="color">
+        <div class="slider big"><label for="dim">Intensidad</label><input type="range" id="dim" min="0" max="1" step="0.005"><output id="dimVal">0%</output></div>
+        <div class="pct">
+          <button class="small ghost" data-dim="0">0</button>
+          <button class="small ghost" data-dim="0.25">25</button>
+          <button class="small ghost" data-dim="0.5">50</button>
+          <button class="small ghost" data-dim="0.75">75</button>
+          <button class="small ghost" data-dim="1">Full</button>
+        </div>
+        <h3>Color</h3>
+        <div class="swatches" id="palette"></div>
+        <div class="row" style="margin-top:12px">
+          <label class="hint" for="customColor">Color a medida</label>
+          <input type="color" id="customColor" value="#ff00aa">
+          <span class="grow"></span>
+          <button id="btnLocate" class="ghost" title="Prende la selección en blanco, a full y centrada">Ubicar</button>
+          <button id="btnOff" class="ghost">Apagar selección</button>
+        </div>
+      </div>
+
+      <div class="ppanel" data-p="pos">
+        <p class="hint" id="posHint">Arrastrá dentro del recuadro para apuntar los cabezales elegidos. Horizontal = pan, vertical = tilt.</p>
+        <div id="xy"><span class="ax" style="left:50%;bottom:4px;transform:translateX(-50%)">pan</span><span class="ax" style="left:6px;top:50%;transform:translateY(-50%)">tilt</span></div>
+        <div class="slider" style="margin-top:12px"><label for="fan">Abanico</label><input type="range" id="fan" min="-1" max="1" step="0.01" value="0"><output id="fanVal">0</output></div>
+        <div class="slider"><label for="pts">Velocidad mov.</label><input type="range" id="pts" min="0" max="1" step="0.01"><output id="ptsVal"></output></div>
+        <div class="row" style="margin:6px 0 4px"><button class="ghost small" id="btnCenter">Centrar</button></div>
+        <h3>Posiciones guardadas</h3>
+        <div class="row" id="positions"></div>
+        <div class="row" style="margin-top:10px"><button id="btnSavePos" class="ghost">Guardar posición actual</button></div>
+      </div>
+
+      <div class="ppanel" data-p="haz">
+        <div id="hazEmpty" class="hint">Los equipos elegidos no tienen rueda de color, gobos ni prisma.</div>
+        <div id="hazCw"><h3>Rueda de color</h3><div class="slots" id="cwSlots"></div></div>
+        <div id="hazGobo"><h3>Gobo</h3><div class="slots" id="goboSlots"></div></div>
+        <div id="hazPrism"><h3>Prisma</h3><div class="slots" id="prismSlots"></div>
+          <div class="slider"><label for="prot">Rotación</label><input type="range" id="prot" min="0" max="1" step="0.01"><output id="protVal"></output></div>
+        </div>
+        <div id="hazFocus"><div class="slider"><label for="focus">Foco</label><input type="range" id="focus" min="0" max="1" step="0.01"><output id="focusVal"></output></div></div>
+        <div id="hazStrobe"><h3>Strobo del equipo</h3>
+          <div class="slider"><label for="strobe">Velocidad</label><input type="range" id="strobe" min="0" max="1" step="0.01"><output id="strobeVal"></output></div>
+          <p class="hint">En cero no hay strobo.</p>
+        </div>
+      </div>
+
+      <div class="ppanel" data-p="fx">
+        <h3>Intensidad</h3>
+        <div class="fxgrid">
+          <button data-fx="pulso">Persecución<small>Uno por vez</small></button>
+          <button data-fx="onda">Onda<small>Sube y baja en ola</small></button>
+          <button data-fx="respirar">Respiración<small>Todos juntos, lento</small></button>
+          <button data-fx="azar">Aleatorio<small>Prende al azar</small></button>
+        </div>
+        <h3>Color</h3>
+        <div class="fxgrid">
+          <button data-fx="arcoiris">Arcoíris<small>Recorre los colores</small></button>
+          <button data-fx="colores">Alternar colores<small>Entre los que elijas</small></button>
+        </div>
+        <h3>Movimiento</h3>
+        <div class="fxgrid">
+          <button data-fx="circulo">Círculo</button>
+          <button data-fx="ocho">Ocho</button>
+          <button data-fx="paneo">Paneo<small>Lado a lado</small></button>
+          <button data-fx="tilt">Tilt<small>Arriba y abajo</small></button>
+        </div>
+        <div class="colhead" style="margin-top:18px"><h2>Efectos activos</h2><button class="ghost small" id="btnFxClearSel">Quitar efectos de la selección</button></div>
+        <div id="fxList"></div>
+      </div>
+    </div>
+
+    <div class="col">
+      <div class="colhead"><h2>Escenas</h2>
+        <div class="row"><button class="ghost small" id="btnEditScenes">Editar</button><button id="btnSaveScene">Guardar escena</button></div>
+      </div>
+      <div class="scenes" id="scenes"></div>
+      <p class="hint" id="scenesEmpty">Armá un look y tocá “Guardar escena”. Después la recuperás con un toque o con las teclas 1 a 9.</p>
+
+      <div class="colhead" style="margin-top:22px"><h2>Secuencia</h2>
+        <label class="hint row" style="gap:6px"><input type="checkbox" id="cueLoop"> Repetir al terminar</label>
+      </div>
+      <button id="go" title="Siguiente paso (barra espaciadora)">GO</button>
+      <div class="row"><button class="ghost grow" id="btnBack">Atrás</button><button class="ghost grow" id="btnStopCues">Parar</button></div>
+      <ol class="cues" id="cues"></ol>
+      <div class="row"><select id="cueScene" class="grow"></select><button class="ghost" id="btnAddCue">Agregar paso</button></div>
+      <p class="hint">“Espera” en segundos hace que la secuencia avance sola. Vacío = espera el GO.</p>
+    </div>
+  </section>
+
+  <!-- ======================================================== PATCH -->
+  <section id="patch" class="view">
+    <div class="page">
+      <p class="hint">Cada equipo escucha a partir de su dirección DMX. Tiene que coincidir con la que configuraste en el display del equipo (por ejemplo d001).</p>
+      <div id="conflicts"></div>
+      <table>
+        <thead><tr><th></th><th>Nombre</th><th>Tipo</th><th>Dirección</th><th>Canales</th><th>Invertir</th><th></th></tr></thead>
+        <tbody id="patchRows"></tbody>
+      </table>
+      <div class="dmxbar" id="dmxbar" title="Uso del universo DMX (512 canales)"></div>
+      <div class="box">
+        <h2>Agregar equipos</h2>
+        <div class="row" style="margin-top:10px">
+          <select id="addProfile" class="grow"></select>
+          <label class="hint">Cantidad <input type="number" id="addCount" min="1" max="32" value="1"></label>
+          <label class="hint">Desde dirección <input type="number" id="addAddr" min="1" max="512" placeholder="auto"></label>
+          <input type="text" id="addName" placeholder="Nombre (opcional)">
+          <button id="btnAddFix">Agregar</button>
+        </div>
+        <p class="hint" id="addNote"></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================================================= PROBAR -->
+  <section id="probar" class="view">
+    <div class="page">
+      <p class="hint">Mové cada canal y mirá qué hace el equipo. Si la función no coincide, cambiala en la lista y guardá el perfil. Mientras probás, estos valores pisan a todo lo demás.</p>
+      <div class="row">
+        <select id="testFix" class="grow"></select>
+        <button class="ghost" id="btnTestClear">Soltar todos los canales</button>
+      </div>
+      <div id="profNote" class="box"></div>
+      <div id="chRows"></div>
+      <div class="grid2" id="wheelEditors"></div>
+      <div class="box" id="strobeEdit"></div>
+      <div class="row" style="margin-top:12px">
+        <button id="btnSaveProfile">Guardar perfil</button>
+        <input type="text" id="newProfileName" placeholder="Nombre para guardarlo como perfil nuevo">
+        <button class="ghost" id="btnSaveProfileAs">Guardar como nuevo</button>
+      </div>
+      <div class="box">
+        <h2>Canal suelto</h2>
+        <div class="row" style="margin-top:8px">
+          <label class="hint">Dirección <input type="number" id="rawAddr" min="1" max="512" value="1"></label>
+          <input type="range" id="rawVal" min="0" max="255" value="0" class="grow">
+          <output id="rawValOut" class="addr">0</output>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========================================================= SHOW -->
+  <section id="show" class="view">
+    <div class="page grid2">
+      <div>
+        <div class="box">
+          <h2>Show abierto</h2>
+          <div class="row" style="margin-top:10px">
+            <input type="text" id="showName" class="grow">
+            <button id="btnSaveAs">Guardar con este nombre</button>
+          </div>
+          <p class="hint">Se guarda solo cada pocos segundos. La carpeta es <span id="dataDir"></span>.</p>
+        </div>
+        <div class="box">
+          <h2>Mis shows</h2>
+          <table><tbody id="showRows"></tbody></table>
+          <div class="row" style="margin-top:12px">
+            <input type="text" id="newShowName" placeholder="Nombre del show nuevo" class="grow">
+            <button class="ghost" id="btnNewMine">Nuevo con mis equipos</button>
+            <button class="ghost" id="btnNewEmpty">Nuevo vacío</button>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="box">
+          <h2>Salida DMX</h2>
+          <p id="outDetail" class="hint"></p>
+          <div class="row">
+            <select id="outKind">
+              <option value="auto">Automático (recomendado)</option>
+              <option value="d2xx">Interfaz USB (driver FTDI)</option>
+              <option value="serial">Interfaz USB (puerto COM)</option>
+              <option value="sim">Simulador, sin interfaz</option>
+            </select>
+            <button class="ghost" id="btnReconnect">Reconectar</button>
+          </div>
+          <p class="hint">Cerrá QLC+, FreeStyler o MagicQ antes: la interfaz solo puede usarla un programa a la vez.</p>
+        </div>
+        <div class="box">
+          <h2>Control desde el celular</h2>
+          <label class="row" style="margin-top:8px"><input type="checkbox" id="remote"> Permitir controlar desde otros equipos de la red Wi-Fi</label>
+          <p class="hint" id="remoteHint"></p>
+        </div>
+        <div class="box">
+          <h2>Atajos de teclado</h2>
+          <dl class="keys">
+            <dt><span class="kbd">Espacio</span></dt><dd>GO de la secuencia</dd>
+            <dt><span class="kbd">1</span>…<span class="kbd">9</span></dt><dd>Escenas 1 a 9</dd>
+            <dt><span class="kbd">T</span></dt><dd>Tap de tempo</dd>
+            <dt><span class="kbd">F</span> / <span class="kbd">S</span> / <span class="kbd">H</span></dt><dd>Flash, strobo y humo (mientras la mantenés apretada)</dd>
+            <dt><span class="kbd">B</span></dt><dd>Blackout</dd>
+            <dt><span class="kbd">A</span></dt><dd>Seleccionar todos</dd>
+            <dt><span class="kbd">Esc</span></dt><dd>Deseleccionar</dd>
+          </dl>
+        </div>
+        <div class="row"><button class="danger ghost" id="btnQuit">Apagar luces y cerrar el programa</button></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div id="toast"></div>
+<div id="lost"><div><h2 style="color:var(--text);font-size:20px">Se perdió la conexión con el programa</h2><p class="hint">Si lo cerraste, volvé a abrirlo. Reintentando…</p></div></div>
+<script src="app.js"></script>
+</body>
+</html>

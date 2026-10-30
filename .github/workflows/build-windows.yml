@@ -1,0 +1,34 @@
+name: Armar RenacerLuces.exe
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar herramientas
+        run: pip install pyinstaller pyserial pytest
+
+      - name: Pruebas
+        run: python -m pytest -q tests
+
+      - name: Armar el .exe
+        run: >
+          pyinstaller --noconfirm --onefile --noconsole --name RenacerLuces
+          --add-data "web;web" --add-data "perfiles;perfiles"
+          --hidden-import serial.tools.list_ports
+          renacer_luces.py
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RenacerLuces-windows
+          path: dist/RenacerLuces.exe

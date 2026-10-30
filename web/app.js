@@ -1,0 +1,754 @@
+'use strict';
+/* Renacer Luces — interfaz */
+
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const pct = (v) => Math.round((v || 0) * 100) + '%';
+
+let INIT = null;        // datos fijos (perfiles, paleta…)
+let S = null;           // estado del show (llega por "sync")
+let LIVE = { pv: {} };  // vista previa en vivo
+let PROF = {};          // perfiles por id
+const sel = new Set();  // equipos seleccionados
+let lastScene = null;
+let editScenes = false;
+let dragging = null;    // control que el usuario está moviendo
+const sigs = {};        // firmas para no redibujar de más
+
+const TYPE_LABEL = { cabezal: 'Cabezales', par: 'Pares LED', strobo: 'Strobos', humo: 'Humo', dimmer: 'Dimmers' };
+const TYPE_ORDER = ['cabezal', 'par', 'strobo', 'dimmer', 'humo'];
+
+/* ------------------------------------------------------------ comunicación */
+async function api(cmd, data = {}) {
+  try {
+    const r = await fetch('/api/cmd', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cmd, ...data }) });
+    const j = await r.json();
+    if (!j.ok) { toast(j.error || 'No se pudo hacer', true); return null; }
+    return j.result ?? true;
+  } catch (e) { toast('Sin conexión con el programa', true); return null; }
+}
+// Envía siempre el último valor, en orden, sin saturar (para sliders)
+const lanes = {};
+function sendLatest(key, cmd, data) {
+  const l = (lanes[key] ||= { busy: false, next: null });
+  l.next = [cmd, data];
+  if (!l.busy) pump(l);
+}
+async function pump(l) {
+  l.busy = true;
+  while (l.next) { const [c, d] = l.next; l.next = null; await api(c, d); }
+  l.busy = false;
+}
+
+let toastT = null;
+function toast(msg, err = false) {
+  const t = $('#toast');
+  t.textContent = msg; t.className = 'show' + (err ? ' err' : '');
+  clearTimeout(toastT); toastT = setTimeout(() => (t.className = ''), err ? 4200 : 2200);
+}
+
+function changed(key, val) {
+  const s = JSON.stringify(val);
+  if (sigs[key] === s) return false;
+  sigs[key] = s; return true;
+}
+
+function setVal(el, v) {
+  if (!el || el === dragging || (document.activeElement === el && el.type !== 'range')) return;
+  if (el.type === 'checkbox') el.checked = !!v; else el.value = v;
+}
+document.addEventListener('pointerdown', (e) => { if (e.target.matches('input[type=range]')) dragging = e.target; });
+window.addEventListener('pointerup', () => { dragging = null; });
+
+/* ------------------------------------------------------------ utilidades */
+const fixtures = () => (S ? S.fixtures : []);
+const fx = (id) => fixtures().find((f) => f.id === id);
+const profOf = (id) => PROF[fx(id)?.profile] || null;
+const capsOf = (id) => new Set(profOf(id)?.caps || []);
+const typeOf = (id) => profOf(id)?.tipo || 'dimmer';
+const ordered = (ids) => fixtures().map((f) => f.id).filter((i) => ids.has ? ids.has(i) : ids.includes(i));
+const selIds = () => ordered(sel);
+const selWith = (cap) => selIds().filter((i) => capsOf(i).has(cap));
+const lookOf = (id) => (S && S.look[id]) || {};
+const firstVal = (cap, key) => { const i = selWith(cap)[0]; return i ? lookOf(i)[key] : undefined; };
+
+function hexToRgb(h) { h = h.replace('#', ''); return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16) / 255); }
+
+/* ------------------------------------------------------------ arranque */
+async function boot() {
+  const r = await fetch('/api/init');
+  INIT = await r.json();
+  PROF = Object.fromEntries(INIT.profiles.map((p) => [p.id, p]));
+  buildStatic();
+  onSync(INIT.state);
+  connect();
+}
+
+function connect() {
+  const es = new EventSource('/events');
+  es.addEventListener('sync', (e) => onSync(JSON.parse(e.data)));
+  es.addEventListener('live', (e) => onLive(JSON.parse(e.data)));
+  es.addEventListener('bye', () => { $('#lost').classList.add('show'); });
+  es.onopen = async () => {
+    $('#lost').classList.remove('show');
+    if (INIT) { // por si el programa se reinició con perfiles nuevos
+      try { const j = await (await fetch('/api/profiles')).json(); PROF = Object.fromEntries(j.map((p) => [p.id, p])); } catch (e) { /* nada */ }
+    }
+  };
+  es.onerror = () => { $('#lost').classList.add('show'); };
+}
+
+/* ------------------------------------------------------------ sync / live */
+function onSync(s) {
+  S = s;
+  for (const id of [...sel]) if (!fx(id)) sel.delete(id);
+  renderTop();
+  renderTiles();
+  renderProgrammer();
+  renderScenes();
+  renderCues();
+  renderFxList();
+  renderPositions();
+  renderPatch();
+  renderProbar();
+  renderShow();
+}
+
+function onLive(d) {
+  LIVE = d;
+  for (const t of $$('.tile')) {
+    const p = d.pv[t.dataset.id];
+    if (!p) continue;
+    t.style.setProperty('--c', p.c);
+    t.style.setProperty('--d', p.d);
+    t.classList.toggle('strobing', p.s > 0.01 && p.d > 0.02);
+    const aim = $('.aim', t);
+    if (aim && p.p != null) { aim.style.left = (12 + p.p * 76) + '%'; aim.style.top = (8 + (1 - (p.t ?? 0.5)) * 64) + '%'; }
+  }
+  $('#beat').classList.toggle('hit', d.beat < 0.15);
+  renderOut(d.out);
+  if (S && d.cue !== S.cue_index) { S.cue_index = d.cue; sigs.cues = null; renderCues(); }
+  drawXYPoints();
+}
+
+/* ------------------------------------------------------------ barra superior */
+function renderTop() {
+  $('#bpm').textContent = Math.round(S.bpm);
+  setVal($('#fade'), S.settings.fade);
+  $('#fadeVal').textContent = Number(S.settings.fade).toFixed(1) + ' s';
+  setVal($('#master'), S.master);
+  $('#masterVal').textContent = pct(S.master);
+  $('#btnBlackout').classList.toggle('on', S.blackout);
+  for (const [k, b] of [['flash', '#btnFlash'], ['strobe', '#btnStrobe'], ['humo', '#btnHumo']])
+    $(b).classList.toggle('held', S.holds.includes(k));
+  if (S.output) renderOut(S.output);
+}
+
+function renderOut(o) {
+  if (!o) return;
+  const b = $('#out');
+  b.className = o.kind === 'sim' ? 'sim' : o.connected ? 'ok' : 'err';
+  $('#outLbl').textContent = o.kind === 'sim' ? 'Simulador' : o.connected ? 'Interfaz conectada' : 'Interfaz no encontrada';
+  const det = $('#outDetail');
+  if (det) det.textContent = o.label + (o.connected ? ' — enviando.' : '') + (o.error ? ' ' + o.error : '');
+}
+
+/* ------------------------------------------------------------ equipos */
+function renderTiles() {
+  const sig = fixtures().map((f) => [f.id, f.name, f.profile]);
+  if (changed('tiles', sig)) {
+    const groups = {};
+    for (const f of fixtures()) (groups[typeOf(f.id)] ||= []).push(f);
+    const types = Object.keys(groups).sort((a, b) => TYPE_ORDER.indexOf(a) - TYPE_ORDER.indexOf(b));
+    $('#tileGroups').innerHTML = types.length ? types.map((t) => `
+      <div class="fgroup"><h3>${esc(TYPE_LABEL[t] || t)}</h3><div class="tiles">
+      ${groups[t].map((f, i) => `<button class="tile ${capsOf(f.id).has('mover') ? 'mover' : ''}" data-id="${f.id}" title="${esc(f.name)} — dirección ${f.address}">
+          <span class="num">${i + 1}</span><span class="glow"></span>${capsOf(f.id).has('mover') ? '<span class="aim"></span>' : ''}
+          <span class="nm">${esc(f.name)}</span></button>`).join('')}
+      </div></div>`).join('')
+      : `<div class="emptysel">Todavía no hay equipos. Agregalos en “Equipos y direcciones”.</div>`;
+    const present = new Set(fixtures().map((f) => typeOf(f.id)));
+    $('#groupChips').innerHTML = [
+      ['all', 'Todos'],
+      ...TYPE_ORDER.filter((t) => present.has(t)).map((t) => ['type:' + t, TYPE_LABEL[t]]),
+      ['odd', '1, 3, 5…'], ['even', '2, 4, 6…'], ['h1', 'Primera mitad'], ['h2', 'Segunda mitad'],
+      ['inv', 'Invertir'], ['none', 'Ninguno'],
+    ].map(([k, l]) => `<button class="ghost" data-g="${k}">${esc(l)}</button>`).join('');
+  }
+  paintSelection();
+}
+
+function paintSelection() {
+  for (const t of $$('.tile')) t.classList.toggle('sel', sel.has(t.dataset.id));
+  const n = sel.size;
+  $('#selCount').textContent = n ? `${n} seleccionado${n > 1 ? 's' : ''}` : '';
+}
+
+function applyGroup(g) {
+  const lights = fixtures().filter((f) => typeOf(f.id) !== 'humo').map((f) => f.id);
+  const base = sel.size ? selIds() : lights;
+  let next;
+  if (g === 'all') next = lights;
+  else if (g === 'none') next = [];
+  else if (g.startsWith('type:')) next = fixtures().filter((f) => typeOf(f.id) === g.slice(5)).map((f) => f.id);
+  else if (g === 'odd') next = base.filter((_, i) => i % 2 === 0);
+  else if (g === 'even') next = base.filter((_, i) => i % 2 === 1);
+  else if (g === 'h1') next = base.slice(0, Math.ceil(base.length / 2));
+  else if (g === 'h2') next = base.slice(Math.ceil(base.length / 2));
+  else if (g === 'inv') next = lights.filter((i) => !sel.has(i));
+  sel.clear(); next.forEach((i) => sel.add(i));
+  selectionChanged();
+}
+
+function selectionChanged() {
+  paintSelection();
+  $('#fan').value = 0; $('#fanVal').textContent = '0';
+  sigs.prog = null;
+  renderProgrammer();
+}
+
+/* ------------------------------------------------------------ programador */
+function renderProgrammer() {
+  const ids = selIds();
+  $('#noSel').style.display = ids.length ? 'none' : '';
+  const dim = firstVal('dim', 'dim');
+  setVal($('#dim'), dim ?? 0);
+  $('#dimVal').textContent = dim == null ? '—' : pct(dim);
+
+  // posición
+  const movers = selWith('mover');
+  $('#posHint').textContent = movers.length
+    ? 'Arrastrá dentro del recuadro para apuntar. Si elegiste varios cabezales, se mueven juntos manteniendo el abanico.'
+    : 'Elegí uno o más cabezales para moverlos.';
+  const pts = firstVal('pts', 'pts');
+  setVal($('#pts'), pts ?? 0);
+  $('#ptsVal').textContent = pts == null ? '—' : (pts < 0.05 ? 'máxima' : pct(1 - pts));
+
+  // haz
+  const has = (c) => selWith(c).length > 0;
+  $('#hazCw').style.display = has('cw') ? '' : 'none';
+  $('#hazGobo').style.display = has('gobo') ? '' : 'none';
+  $('#hazPrism').style.display = has('prism') || has('prot') ? '' : 'none';
+  $('#hazFocus').style.display = has('focus') ? '' : 'none';
+  $('#hazStrobe').style.display = has('strobe') ? '' : 'none';
+  $('#hazEmpty').style.display = ['cw', 'gobo', 'prism', 'focus', 'strobe'].some(has) ? 'none' : '';
+  const slotsSig = ['cw', 'gobo', 'prism'].map((c) => [selWith(c)[0] ? fx(selWith(c)[0]).profile : null, firstVal(c, c)]);
+  if (changed('slots', slotsSig)) {
+    renderSlots('#cwSlots', 'cw', 'color_wheel', true);
+    renderSlots('#goboSlots', 'gobo', 'gobo');
+    renderSlots('#prismSlots', 'prism', 'prism');
+  }
+  for (const [id, cap, key] of [['prot', 'prot', 'prot'], ['focus', 'focus', 'focus'], ['strobe', 'strobe', 'strobe']]) {
+    const v = firstVal(cap, key);
+    setVal($('#' + id), v ?? 0);
+    $('#' + id + 'Val').textContent = v == null ? '—' : (id === 'strobe' && v < 0.005 ? 'no' : pct(v));
+  }
+  drawXYPoints();
+}
+
+function renderSlots(sel_, cap, key, swatch = false) {
+  const first = selWith(cap)[0];
+  const slots = first ? (PROF[fx(first).profile][key] || []) : [];
+  const cur = first ? lookOf(first)[cap] : -1;
+  $(sel_).innerHTML = slots.map((s, i) => `<button class="${i === cur ? 'on' : 'ghost'}" data-slot="${cap}" data-i="${i}">
+     ${swatch ? `<span class="chip" style="background:${esc(s.hex || '#fff')}"></span>` : ''}${esc(s.nombre)}</button>`).join('');
+}
+
+/* XY pad */
+let xyDrag = null;
+function xyFromEvent(e) {
+  const r = $('#xy').getBoundingClientRect();
+  return [Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)), Math.min(1, Math.max(0, 1 - (e.clientY - r.top) / r.height))];
+}
+function drawXYPoints() {
+  const pad = $('#xy');
+  if (!pad || !S) return;
+  const movers = selWith('mover');
+  const pts = $$('.pt', pad);
+  while (pts.length < movers.length) { const d = document.createElement('span'); d.className = 'pt'; pad.appendChild(d); pts.push(d); }
+  pts.forEach((p, k) => {
+    const id = movers[k];
+    if (!id) { p.remove(); return; }
+    const lv = LIVE.pv[id] || {};
+    const pan = lv.p ?? lookOf(id).pan ?? 0.5, tilt = lv.t ?? lookOf(id).tilt ?? 0.5;
+    p.style.left = pan * 100 + '%'; p.style.top = (1 - tilt) * 100 + '%';
+  });
+}
+
+/* ------------------------------------------------------------ efectos */
+const FX_SIZE_LABEL = { pulso: 'Ancho', onda: 'Profundidad', azar: 'Cantidad', circulo: 'Tamaño', ocho: 'Tamaño', paneo: 'Tamaño', tilt: 'Tamaño' };
+function renderFxList() {
+  if (!changed('fx', S.fx.map((f) => [f.id, f.type, f.ids, f.sync, f.beats, f.hz, f.size, f.spread, f.reverse, f.colors]))) return;
+  if (dragging && dragging.closest('#fxList')) { sigs.fx = null; return; }
+  const names = (ids) => ids.map((i) => fx(i)?.name).filter(Boolean);
+  $('#fxList').innerHTML = S.fx.length ? S.fx.map((f) => {
+    const n = names(f.ids);
+    const typeName = INIT.fx_types[f.type]?.name || f.type;
+    const speed = f.sync
+      ? `<div class="slider"><label>Una vuelta cada</label><select data-fx="${f.id}" data-k="beats">${[1, 2, 4, 8, 16, 32].map((b) => `<option value="${b}" ${+f.beats === b ? 'selected' : ''}>${b} tiempo${b > 1 ? 's' : ''}</option>`).join('')}</select><output></output></div>`
+      : `<div class="slider"><label>Velocidad</label><input type="range" min="0.02" max="4" step="0.01" value="${f.hz}" data-fx="${f.id}" data-k="hz"><output>${(+f.hz).toFixed(2)}/s</output></div>`;
+    const size = FX_SIZE_LABEL[f.type] ? `<div class="slider"><label>${FX_SIZE_LABEL[f.type]}</label><input type="range" min="0" max="1" step="0.01" value="${f.size}" data-fx="${f.id}" data-k="size"><output>${pct(f.size)}</output></div>` : '';
+    const colors = f.type === 'colores' ? `<div class="row" style="margin:6px 0">
+        ${f.colors.map((c, i) => `<input type="color" value="${esc(c)}" data-fxc="${f.id}" data-i="${i}">`).join('')}
+        <button class="ghost small" data-fxcadd="${f.id}" ${f.colors.length >= 6 ? 'disabled' : ''}>+ color</button>
+        <button class="ghost small" data-fxcdel="${f.id}" ${f.colors.length <= 2 ? 'disabled' : ''}>− color</button></div>` : '';
+    return `<div class="fxcard">
+      <div class="row"><strong>${esc(typeName)}</strong><span class="hint grow">${esc(n.length > 3 ? n.length + ' equipos' : n.join(', '))}</span>
+        <button class="ghost small" data-fxdel="${f.id}">Quitar</button></div>
+      <label class="hint row" style="gap:6px;margin:6px 0"><input type="checkbox" data-fx="${f.id}" data-k="sync" ${f.sync ? 'checked' : ''}> Al tempo (${Math.round(S.bpm)} BPM)</label>
+      ${speed}${size}
+      <div class="slider"><label>Desfase</label><input type="range" min="0" max="1" step="0.01" value="${f.spread}" data-fx="${f.id}" data-k="spread"><output>${pct(f.spread)}</output></div>
+      ${colors}
+      <div class="row"><button class="small ${f.reverse ? 'on' : 'ghost'}" data-fx="${f.id}" data-k="reverse">Invertir dirección</button></div>
+    </div>`;
+  }).join('') : '<p class="hint">No hay efectos corriendo. Elegí equipos y tocá un efecto de arriba.</p>';
+}
+
+/* ------------------------------------------------------------ escenas */
+function renderScenes() {
+  if (!changed('scenes', [S.scenes, editScenes, lastScene])) return;
+  $('#scenesEmpty').style.display = S.scenes.length ? 'none' : '';
+  $('#btnEditScenes').classList.toggle('on', editScenes);
+  $('#btnEditScenes').textContent = editScenes ? 'Listo' : 'Editar';
+  $('#scenes').innerHTML = S.scenes.map((s, i) => `
+    <div class="scene ${s.id === lastScene ? 'last' : ''}" style="--sc:${esc(s.color)}" ${editScenes ? '' : `role="button" tabindex="0" data-scene="${s.id}"`}>
+      ${i < 9 ? `<span class="k">${i + 1}</span>` : ''}${esc(s.name)}
+      ${editScenes ? `<div class="tools">
+        <button data-sre="${s.id}" title="Reemplaza la escena por lo que está en escena ahora">Regrabar</button>
+        <button data-sren="${s.id}">Renombrar</button>
+        <input type="color" value="${esc(s.color)}" data-scol="${s.id}" title="Color del botón" style="width:30px;height:24px;border:0;padding:0;background:none">
+        <button data-smv="${s.id}" data-d="-1" title="Mover antes">◀</button><button data-smv="${s.id}" data-d="1" title="Mover después">▶</button>
+        <button data-sdel="${s.id}" class="danger">Borrar</button></div>` : ''}
+    </div>`).join('');
+  $('#cueScene').innerHTML = S.scenes.map((s) => `<option value="${s.id}">${esc(s.name)}</option>`).join('');
+  $('#btnAddCue').disabled = !S.scenes.length;
+}
+document.addEventListener('click', (e) => {
+  const sc = e.target.closest('[data-scene]');
+  if (sc && sc.closest('.scene')) recall(sc.dataset.scene);
+});
+function recall(id) { lastScene = id; sigs.scenes = null; api('recall_scene', { id }); }
+
+/* ------------------------------------------------------------ secuencia */
+function renderCues() {
+  setVal($('#cueLoop'), S.settings.cue_loop);
+  if (!changed('cues', [S.cues, S.cue_index, S.scenes.map((s) => [s.id, s.name])])) return;
+  const opts = (cur) => S.scenes.map((s) => `<option value="${s.id}" ${s.id === cur ? 'selected' : ''}>${esc(s.name)}</option>`).join('');
+  $('#cues').innerHTML = S.cues.length ? S.cues.map((c, i) => `
+    <li class="cue ${i === S.cue_index ? 'cur' : ''}">
+      <button class="n ghost small" data-cuego="${i}" title="Ir a este paso">${i + 1}</button>
+      <div><select data-cue="${c.id}" data-k="scene">${opts(c.scene)}</select>
+        <div class="meta" style="margin-top:6px">
+          <label>Fundido <input type="number" step="0.1" min="0" value="${c.fade}" data-cue="${c.id}" data-k="fade"> s</label>
+          <label>Espera <input type="number" step="0.5" min="0" value="${c.wait ?? ''}" placeholder="GO" data-cue="${c.id}" data-k="wait"> s</label>
+        </div></div>
+      <div class="row" style="flex-direction:column;gap:4px">
+        <button class="ghost small" data-cuemv="${c.id}" data-d="-1" title="Subir">▲</button>
+        <button class="ghost small" data-cuemv="${c.id}" data-d="1" title="Bajar">▼</button>
+        <button class="ghost small danger" data-cuedel="${c.id}" title="Quitar paso">✕</button>
+      </div></li>`).join('') : '<p class="hint">La secuencia está vacía. Agregá pasos con escenas ya guardadas.</p>';
+  $('#go').textContent = S.cue_index >= 0 && S.cues.length ? `GO  ${Math.min(S.cue_index + 2, S.cues.length)}/${S.cues.length}` : 'GO';
+}
+
+/* ------------------------------------------------------------ posiciones */
+function renderPositions() {
+  if (!changed('pos', S.positions)) return;
+  $('#positions').innerHTML = S.positions.length ? S.positions.map((p) => `
+     <span class="row" style="gap:2px"><button data-pos="${p.id}">${esc(p.name)}</button><button class="ghost small" data-posdel="${p.id}" title="Borrar posición">✕</button></span>`).join('')
+    : '<span class="hint">Todavía no guardaste posiciones. Apuntá los cabezales y guardala con un nombre (ej. “Pista”, “Novios”).</span>';
+}
+
+/* ------------------------------------------------------------ patch */
+function renderPatch() {
+  if (changed('patchProfiles', Object.keys(PROF))) {
+    const groups = {};
+    for (const p of Object.values(PROF)) (groups[p.tipo || 'otro'] ||= []).push(p);
+    $('#addProfile').innerHTML = Object.entries(groups).map(([t, ps]) => `<optgroup label="${esc(TYPE_LABEL[t] || t)}">
+      ${ps.map((p) => `<option value="${p.id}">${esc(p.nombre)}${p.origen === 'usuario' ? ' (propio)' : ''}</option>`).join('')}</optgroup>`).join('');
+    updateAddNote();
+  }
+  if (!changed('patch', [S.fixtures, S.conflicts, Object.keys(PROF)])) return;
+  const conf = S.conflicts.map((g) => g.map((i) => fx(i)?.name).join(' y '));
+  $('#conflicts').innerHTML = conf.length ? `<div class="box errbox">Hay equipos que se pisan: ${esc(conf.join('; '))}. Cambiá una de las direcciones.</div>` : '';
+  $('#patchRows').innerHTML = fixtures().map((f) => {
+    const p = PROF[f.profile]; const n = p ? p.canales.length : 1; const mover = capsOf(f.id).has('mover');
+    return `<tr>
+      <td><div class="row" style="gap:2px;flex-wrap:nowrap"><button class="ghost small" data-fmv="${f.id}" data-d="-1" title="Subir">▲</button><button class="ghost small" data-fmv="${f.id}" data-d="1" title="Bajar">▼</button></div></td>
+      <td><input type="text" value="${esc(f.name)}" data-fix="${f.id}" data-k="name"></td>
+      <td>${esc(p ? p.nombre : 'Perfil faltante: ' + f.profile)}${p && !p.verificado ? ' <span style="color:var(--warn)">(a verificar)</span>' : ''}</td>
+      <td><input type="number" min="1" max="512" value="${f.address}" data-fix="${f.id}" data-k="address"></td>
+      <td class="addr">${f.address}–${f.address + n - 1}</td>
+      <td>${mover ? `<label class="hint"><input type="checkbox" data-fix="${f.id}" data-k="invert_pan" ${f.invert_pan ? 'checked' : ''}> pan</label>
+                     <label class="hint"><input type="checkbox" data-fix="${f.id}" data-k="invert_tilt" ${f.invert_tilt ? 'checked' : ''}> tilt</label>` : ''}</td>
+      <td><button class="ghost small danger" data-fdel="${f.id}">Quitar</button></td></tr>`;
+  }).join('') || '<tr><td colspan="7" class="hint">No hay equipos en este show.</td></tr>';
+  const use = new Array(513).fill(0);
+  for (const f of fixtures()) { const n = PROF[f.profile]?.canales.length || 1; for (let a = f.address; a < f.address + n && a <= 512; a++) use[a]++; }
+  $('#dmxbar').innerHTML = use.slice(1).map((u) => `<i class="${u > 1 ? 'x' : u ? 'u' : ''}"></i>`).join('');
+  updateAddNote();
+}
+function updateAddNote() {
+  const p = PROF[$('#addProfile').value];
+  if (!p || !S) return;
+  const n = p.canales.length;
+  const used = new Set();
+  for (const f of fixtures()) { const m = PROF[f.profile]?.canales.length || 1; for (let a = f.address; a < f.address + m; a++) used.add(a); }
+  let free = null; for (let a = 1; a + n - 1 <= 512; a++) { let ok = true; for (let k = 0; k < n; k++) if (used.has(a + k)) { ok = false; break; } if (ok) { free = a; break; } }
+  $('#addNote').textContent = `Ocupa ${n} canal${n > 1 ? 'es' : ''}. ${free ? 'Próxima dirección libre: ' + free + '.' : 'No queda lugar en el universo.'} ${p.nota || ''}`;
+}
+
+/* ------------------------------------------------------------ probar canales */
+let draft = null;      // copia editable del perfil
+let draftFor = null;
+function renderProbar() {
+  if (changed('testFixList', fixtures().map((f) => [f.id, f.name]))) {
+    const cur = $('#testFix').value;
+    $('#testFix').innerHTML = fixtures().map((f) => `<option value="${f.id}">${esc(f.name)} — dirección ${f.address} (${esc(PROF[f.profile]?.nombre || f.profile)})</option>`).join('');
+    if (cur && fx(cur)) $('#testFix').value = cur;
+  }
+  const id = $('#testFix').value;
+  const f = fx(id);
+  const key = f ? [f.id, f.profile, f.address, PROF[f.profile]] : null;
+  if (changed('probar', key)) {
+    draftFor = f ? f.id : null;
+    draft = f && PROF[f.profile] ? JSON.parse(JSON.stringify(PROF[f.profile])) : null;
+    buildProbar();
+  }
+  // valores en vivo de prueba
+  for (const r of $$('.chrow')) {
+    const a = r.dataset.addr; const v = S.test[a];
+    r.classList.toggle('live', v != null);
+    const sl = $('input[type=range]', r);
+    if (v != null) { setVal(sl, v); $('.v', r).textContent = v; }
+  }
+}
+function buildProbar() {
+  const f = fx(draftFor);
+  if (!f || !draft) { $('#chRows').innerHTML = '<p class="hint">Elegí un equipo.</p>'; $('#profNote').innerHTML = ''; $('#wheelEditors').innerHTML = ''; $('#strobeEdit').style.display = 'none'; return; }
+  $('#profNote').className = 'box' + (draft.verificado ? '' : ' warnbox');
+  $('#profNote').innerHTML = `<strong>${esc(draft.nombre)}</strong>${draft.origen === 'usuario' ? ' (perfil propio)' : ''}<br><span>${esc(draft.nota || '')}</span>`;
+  const opts = (cur) => Object.entries(INIT.channel_attrs).map(([k, l]) => `<option value="${k}" ${k === cur ? 'selected' : ''}>${esc(l)}</option>`).join('');
+  $('#chRows').innerHTML = `<div class="chrow hint"><span>Canal</span><span>Dir.</span><span class="fn">Función</span><span>Probar</span><span></span></div>` +
+    draft.canales.map((c, i) => {
+      const addr = f.address + i;
+      return `<div class="chrow" data-addr="${addr}">
+        <span class="addr">${i + 1}</span><span class="hint">${addr}</span>
+        <span class="fn row" style="gap:6px"><select data-ch="${i}">${opts(c.attr)}</select>
+          ${c.attr === 'raw' ? `<input type="number" min="0" max="255" value="${c.default || 0}" data-chdef="${i}" title="Valor fijo cuando no lo estás probando">` : ''}</span>
+        <input type="range" min="0" max="255" value="${S.test[addr] ?? 0}" data-test="${addr}">
+        <span class="v">${S.test[addr] ?? '—'}</span></div>`;
+    }).join('');
+  const attrs = new Set(draft.canales.map((c) => c.attr));
+  const wheel = (key, title, withHex) => attrs.has(key === 'color_wheel' ? 'color_wheel' : key) ? `<div class="box"><h2>${title}</h2>
+      <p class="hint">Una posición por línea: ${withHex ? '<em>Nombre = valor DMX = #color</em>' : '<em>Nombre = valor DMX</em>'}. Probá el canal arriba para encontrar los valores.</p>
+      <textarea data-wheel="${key}">${esc((draft[key] || []).map((s) => withHex ? `${s.nombre} = ${s.dmx} = ${s.hex || '#ffffff'}` : `${s.nombre} = ${s.dmx}`).join('\n'))}</textarea></div>` : '';
+  $('#wheelEditors').innerHTML = wheel('color_wheel', 'Rueda de color', true) + wheel('gobo', 'Gobos', false) + wheel('prism', 'Prisma', false);
+  const st = draft.strobe || { off: 0, min: 10, max: 255 };
+  $('#strobeEdit').style.display = attrs.has('strobe') ? '' : 'none';
+  $('#strobeEdit').innerHTML = `<h2>Canal de strobo</h2><div class="row" style="margin-top:8px">
+     <label class="hint">Sin strobo <input type="number" min="0" max="255" value="${st.off}" data-st="off"></label>
+     <label class="hint">Más lento <input type="number" min="0" max="255" value="${st.min}" data-st="min"></label>
+     <label class="hint">Más rápido <input type="number" min="0" max="255" value="${st.max}" data-st="max"></label></div>`;
+}
+function parseWheel(text, withHex) {
+  return text.split('\n').map((l) => l.trim()).filter(Boolean).map((l) => {
+    const parts = l.split('=').map((x) => x.trim());
+    const o = { nombre: parts[0] || 'Posición', dmx: Math.max(0, Math.min(255, parseInt(parts[1], 10) || 0)) };
+    if (withHex) o.hex = /^#[0-9a-f]{6}$/i.test(parts[2] || '') ? parts[2] : '#ffffff';
+    return o;
+  });
+}
+function collectDraft() {
+  for (const t of $$('[data-wheel]')) draft[t.dataset.wheel] = parseWheel(t.value, t.dataset.wheel === 'color_wheel');
+  for (const i of $$('[data-st]')) { draft.strobe = draft.strobe || {}; draft.strobe[i.dataset.st] = Math.max(0, Math.min(255, +i.value || 0)); }
+  const clean = JSON.parse(JSON.stringify(draft)); delete clean.caps; delete clean.id; delete clean.origen;
+  return clean;
+}
+
+/* ------------------------------------------------------------ show */
+function renderShow() {
+  setVal($('#showName'), S.show_name);
+  $('#dataDir').textContent = INIT.data_dir;
+  if (S.app_settings) {
+    setVal($('#outKind'), S.app_settings.salida || 'auto');
+    setVal($('#remote'), S.app_settings.control_remoto);
+    $('#remoteHint').textContent = S.app_settings.control_remoto
+      ? `Activado. Si recién lo prendiste, cerrá y volvé a abrir el programa. Después, en el celular (misma Wi-Fi) abrí ${INIT.lan}`
+      : 'Desactivado: solo se puede controlar desde esta computadora.';
+  }
+  if (S.shows && changed('shows', [S.shows.map((s) => s.name), S.show_name])) {
+    $('#showRows').innerHTML = S.shows.map((s) => `<tr><td>${esc(s.name)}${s.name === S.show_name ? ' <span class="hint">(abierto)</span>' : ''}</td>
+      <td class="hint">${new Date(s.mtime * 1000).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' })}</td>
+      <td style="text-align:right">${s.name === S.show_name ? '' : `<button class="ghost small" data-showopen="${esc(s.name)}">Abrir</button>
+        <button class="ghost small danger" data-showdel="${esc(s.name)}">Borrar</button>`}</td></tr>`).join('');
+  }
+}
+
+/* ------------------------------------------------------------ armado estático y eventos */
+function buildStatic() {
+  $('#palette').innerHTML = INIT.palette.map((c, i) => `<button class="swatch" style="--sw:${c.hex}" data-pal="${i}"><span>${esc(c.nombre)}</span></button>`).join('');
+
+  // pestañas
+  for (const b of $$('#tabs button')) b.onclick = () => {
+    $$('#tabs button').forEach((x) => x.classList.toggle('on', x === b));
+    $$('.view').forEach((v) => v.classList.toggle('on', v.id === b.dataset.view));
+    if (b.dataset.view !== 'probar' && S && Object.keys(S.test).length) api('test_clear');
+  };
+  for (const b of $$('#progTabs button')) b.onclick = () => {
+    $$('#progTabs button').forEach((x) => x.classList.toggle('on', x === b));
+    $$('.ppanel').forEach((p) => p.classList.toggle('on', p.dataset.p === b.dataset.p));
+    drawXYPoints();
+  };
+  $('#out').onclick = () => $('#tabs [data-view=show]').click();
+
+  // barra superior
+  $('#btnTap').onclick = () => api('tap');
+  $('#fade').oninput = (e) => { $('#fadeVal').textContent = (+e.target.value).toFixed(1) + ' s'; sendLatest('fade', 'show_settings', { fade: +e.target.value }); };
+  $('#master').oninput = (e) => { $('#masterVal').textContent = pct(+e.target.value); sendLatest('master', 'master', { value: +e.target.value }); };
+  $('#btnBlackout').onclick = () => api('blackout', { on: !S.blackout });
+  for (const [k, b] of [['flash', '#btnFlash'], ['strobe', '#btnStrobe'], ['humo', '#btnHumo']]) {
+    const el = $(b);
+    const on = (e) => { e.preventDefault(); el.setPointerCapture?.(e.pointerId); el.classList.add('held'); api('hold', { kind: k, on: true }); };
+    const off = () => { if (!el.classList.contains('held')) return; el.classList.remove('held'); api('hold', { kind: k, on: false }); };
+    el.addEventListener('pointerdown', on);
+    el.addEventListener('pointerup', off); el.addEventListener('pointercancel', off); el.addEventListener('lostpointercapture', off);
+  }
+
+  // equipos
+  $('#tileGroups').addEventListener('click', (e) => {
+    const t = e.target.closest('.tile'); if (!t) return;
+    sel.has(t.dataset.id) ? sel.delete(t.dataset.id) : sel.add(t.dataset.id);
+    selectionChanged();
+  });
+  $('#groupChips').addEventListener('click', (e) => { const b = e.target.closest('[data-g]'); if (b) applyGroup(b.dataset.g); });
+
+  // color e intensidad
+  const needSel = () => { if (!sel.size) { toast('Primero elegí equipos'); return false; } return true; };
+  $('#dim').oninput = (e) => { if (!needSel()) return; $('#dimVal').textContent = pct(+e.target.value); sendLatest('dim', 'set_attrs', { ids: selIds(), attrs: { dim: +e.target.value } }); };
+  for (const b of $$('[data-dim]')) b.onclick = () => needSel() && api('set_attrs', { ids: selIds(), attrs: { dim: +b.dataset.dim } });
+  $('#palette').addEventListener('click', (e) => { const b = e.target.closest('[data-pal]'); if (b && needSel()) api('set_color', { ids: selIds(), rgbw: INIT.palette[+b.dataset.pal].rgbw }); });
+  $('#customColor').oninput = (e) => { if (needSel()) sendLatest('color', 'set_color', { ids: selIds(), rgbw: [...hexToRgb(e.target.value), 0] }); };
+  $('#btnLocate').onclick = () => needSel() && api('locate', { ids: selIds() });
+  $('#btnOff').onclick = () => needSel() && api('clear', { ids: selIds() });
+
+  // posición
+  const pad = $('#xy');
+  pad.addEventListener('pointerdown', (e) => {
+    const movers = selWith('mover');
+    if (!movers.length) { toast('Elegí cabezales para moverlos'); return; }
+    pad.setPointerCapture(e.pointerId);
+    const start = Object.fromEntries(movers.map((i) => [i, [lookOf(i).pan ?? 0.5, lookOf(i).tilt ?? 0.5]]));
+    const cx = movers.reduce((a, i) => a + start[i][0], 0) / movers.length;
+    const cy = movers.reduce((a, i) => a + start[i][1], 0) / movers.length;
+    xyDrag = { movers, start, cx, cy };
+    xyMove(e);
+  });
+  pad.addEventListener('pointermove', (e) => xyDrag && xyMove(e));
+  const end = () => { xyDrag = null; };
+  pad.addEventListener('pointerup', end); pad.addEventListener('pointercancel', end);
+  $('#fan').oninput = (e) => { $('#fanVal').textContent = (+e.target.value).toFixed(2); const m = selWith('mover'); if (m.length > 1) sendLatest('fan', 'fan', { ids: m, amount: +e.target.value }); else toast('El abanico necesita dos o más cabezales'); };
+  $('#pts').oninput = (e) => { const m = selWith('pts'); if (m.length) sendLatest('pts', 'set_attrs', { ids: m, attrs: { pts: +e.target.value } }); };
+  $('#btnCenter').onclick = () => { const m = selWith('mover'); if (m.length) api('set_position', { ids: m, pan: 0.5, tilt: 0.5 }); };
+  $('#btnSavePos').onclick = async () => {
+    const m = selWith('mover'); if (!m.length) { toast('Elegí los cabezales cuya posición querés guardar'); return; }
+    const name = prompt('Nombre de la posición', 'Posición ' + (S.positions.length + 1)); if (name === null) return;
+    if (await api('save_position', { ids: m, name })) toast('Posición guardada');
+  };
+  $('#positions').addEventListener('click', (e) => {
+    const p = e.target.closest('[data-pos]'); if (p) api('recall_position', { id: p.dataset.pos, ids: selWith('mover') });
+    const d = e.target.closest('[data-posdel]'); if (d && confirm('¿Borrar esta posición?')) api('delete_position', { id: d.dataset.posdel });
+  });
+
+  // haz
+  $('.ppanel[data-p=haz]').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-slot]'); if (!b) return;
+    const cap = b.dataset.slot; api('set_wheel', { ids: selWith(cap), key: cap, index: +b.dataset.i });
+  });
+  for (const k of ['prot', 'focus', 'strobe']) $('#' + k).oninput = (e) => {
+    const ids = selWith(k); if (!ids.length) return;
+    $('#' + k + 'Val').textContent = k === 'strobe' && +e.target.value < 0.005 ? 'no' : pct(+e.target.value);
+    sendLatest(k, 'set_attrs', { ids, attrs: { [k]: +e.target.value } });
+  };
+
+  // efectos
+  $('.ppanel[data-p=fx]').addEventListener('click', async (e) => {
+    const b = e.target.closest('.fxgrid [data-fx]');
+    if (b) {
+      if (!needSel()) return;
+      let type = b.dataset.fx, params = {};
+      if (type === 'respirar') { type = 'onda'; params = { spread: 0, beats: 8, size: 1 }; }
+      if (await api('add_fx', { ids: selIds(), type, params })) toast((INIT.fx_types[type]?.name || 'Efecto') + ' en marcha');
+    }
+  });
+  const fxList = $('#fxList');
+  fxList.addEventListener('input', (e) => {
+    const t = e.target;
+    if (t.dataset.fx && t.type === 'range') {
+      const out = t.parentElement.querySelector('output');
+      if (out) out.textContent = t.dataset.k === 'hz' ? (+t.value).toFixed(2) + '/s' : pct(+t.value);
+      sendLatest('fx' + t.dataset.fx + t.dataset.k, 'update_fx', { id: t.dataset.fx, params: { [t.dataset.k]: +t.value } });
+    }
+    if (t.dataset.fxc) {
+      const f = S.fx.find((x) => x.id === t.dataset.fxc); if (!f) return;
+      const colors = [...f.colors]; colors[+t.dataset.i] = t.value;
+      sendLatest('fxc' + f.id, 'update_fx', { id: f.id, params: { colors } });
+    }
+  });
+  fxList.addEventListener('change', (e) => {
+    const t = e.target;
+    if (t.dataset.fx && t.type === 'checkbox') api('update_fx', { id: t.dataset.fx, params: { [t.dataset.k]: t.checked } });
+    if (t.dataset.fx && t.tagName === 'SELECT') api('update_fx', { id: t.dataset.fx, params: { [t.dataset.k]: +t.value } });
+  });
+  fxList.addEventListener('click', (e) => {
+    const t = e.target.closest('button'); if (!t) return;
+    if (t.dataset.fxdel) api('remove_fx', { id: t.dataset.fxdel });
+    if (t.dataset.k === 'reverse') { const f = S.fx.find((x) => x.id === t.dataset.fx); api('update_fx', { id: t.dataset.fx, params: { reverse: !f.reverse } }); }
+    const palette = ['#ff2020', '#2a46ff', '#22e04a', '#ffd60a', '#ff2ae6', '#22e6ee'];
+    if (t.dataset.fxcadd) { const f = S.fx.find((x) => x.id === t.dataset.fxcadd); api('update_fx', { id: f.id, params: { colors: [...f.colors, palette[f.colors.length % palette.length]] } }); }
+    if (t.dataset.fxcdel) { const f = S.fx.find((x) => x.id === t.dataset.fxcdel); api('update_fx', { id: f.id, params: { colors: f.colors.slice(0, -1) } }); }
+  });
+  $('#btnFxClearSel').onclick = () => needSel() && api('remove_fx', { ids: selIds() });
+
+  // escenas
+  $('#btnSaveScene').onclick = async () => {
+    const name = prompt('Nombre de la escena', 'Escena ' + (S.scenes.length + 1)); if (name === null) return;
+    const id = await api('save_scene', { name, color: INIT.palette[(S.scenes.length + 2) % INIT.palette.length].hex });
+    if (id) { lastScene = id; toast('Escena guardada'); }
+  };
+  $('#btnEditScenes').onclick = () => { editScenes = !editScenes; sigs.scenes = null; renderScenes(); };
+  $('#scenes').addEventListener('click', async (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.sre && confirm('¿Reemplazar esta escena por lo que está en escena ahora?')) { await api('save_scene', { id: b.dataset.sre }); toast('Escena regrabada'); }
+    if (b.dataset.sren) { const s = S.scenes.find((x) => x.id === b.dataset.sren); const n = prompt('Nuevo nombre', s.name); if (n) api('update_scene', { id: s.id, name: n }); }
+    if (b.dataset.smv) api('move_scene', { id: b.dataset.smv, delta: +b.dataset.d });
+    if (b.dataset.sdel && confirm('¿Borrar la escena? También se quita de la secuencia.')) api('delete_scene', { id: b.dataset.sdel });
+  });
+  $('#scenes').addEventListener('change', (e) => { if (e.target.dataset.scol) api('update_scene', { id: e.target.dataset.scol, color: e.target.value }); });
+  $('#scenes').addEventListener('keydown', (e) => { const s = e.target.closest('[data-scene]'); if (s && (e.key === 'Enter')) recall(s.dataset.scene); });
+
+  // secuencia
+  $('#go').onclick = () => api('go');
+  $('#btnBack').onclick = () => api('back');
+  $('#btnStopCues').onclick = () => api('stop_cues');
+  $('#cueLoop').onchange = (e) => api('show_settings', { cue_loop: e.target.checked });
+  $('#btnAddCue').onclick = () => $('#cueScene').value && api('add_cue', { scene: $('#cueScene').value });
+  const cues = $('#cues');
+  cues.addEventListener('change', (e) => {
+    const t = e.target; if (!t.dataset.cue) return;
+    api('update_cue', { id: t.dataset.cue, [t.dataset.k]: t.dataset.k === 'scene' ? t.value : (t.value === '' ? null : +t.value) });
+  });
+  cues.addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.cuego) api('go', { index: +b.dataset.cuego });
+    if (b.dataset.cuemv) api('move_cue', { id: b.dataset.cuemv, delta: +b.dataset.d });
+    if (b.dataset.cuedel) api('delete_cue', { id: b.dataset.cuedel });
+  });
+
+  // patch
+  $('#addProfile').onchange = updateAddNote;
+  $('#btnAddFix').onclick = async () => {
+    const r = await api('add_fixtures', { profile: $('#addProfile').value, count: +$('#addCount').value || 1, address: +$('#addAddr').value || null, name: $('#addName').value.trim() || null });
+    if (r) { toast(r.length > 1 ? `Se agregaron ${r.length} equipos` : 'Equipo agregado'); $('#addAddr').value = ''; $('#addName').value = ''; }
+  };
+  const pr = $('#patchRows');
+  pr.addEventListener('change', (e) => {
+    const t = e.target; if (!t.dataset.fix) return;
+    const v = t.type === 'checkbox' ? t.checked : t.type === 'number' ? +t.value : t.value;
+    api('update_fixture', { id: t.dataset.fix, [t.dataset.k]: v }).then((ok) => { if (!ok) { sigs.patch = null; renderPatch(); } });
+  });
+  pr.addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.fmv) api('move_fixture', { id: b.dataset.fmv, delta: +b.dataset.d });
+    if (b.dataset.fdel && confirm('¿Quitar este equipo del show?')) { sel.delete(b.dataset.fdel); api('remove_fixture', { id: b.dataset.fdel }); }
+  });
+
+  // probar canales
+  $('#testFix').onchange = () => { sigs.probar = null; renderProbar(); };
+  $('#btnTestClear').onclick = () => { api('test_clear'); $$('#chRows input[type=range]').forEach((r) => (r.value = 0)); $$('#chRows .v').forEach((v) => (v.textContent = '—')); };
+  $('#chRows').addEventListener('input', (e) => {
+    const t = e.target;
+    if (t.dataset.test) { t.closest('.chrow').querySelector('.v').textContent = t.value; sendLatest('t' + t.dataset.test, 'test_set', { address: +t.dataset.test, value: +t.value }); }
+  });
+  $('#chRows').addEventListener('change', (e) => {
+    const t = e.target;
+    if (t.dataset.ch != null && t.tagName === 'SELECT') { collectDraft(); draft.canales[+t.dataset.ch].attr = t.value; buildProbar(); }
+    if (t.dataset.chdef != null) draft.canales[+t.dataset.chdef].default = Math.max(0, Math.min(255, +t.value || 0));
+  });
+  $('#btnSaveProfile').onclick = async () => {
+    if (!draft) return;
+    const r = await api('profile_save', { id: draft.id, data: collectDraft() });
+    if (r) { await refreshProfiles(); toast('Perfil guardado. Los equipos que lo usan ya responden con el cambio.'); }
+  };
+  $('#btnSaveProfileAs').onclick = async () => {
+    const name = $('#newProfileName').value.trim();
+    if (!draft || !name) { toast('Escribí un nombre para el perfil nuevo'); return; }
+    const old = fx(draftFor).profile;
+    const data = collectDraft(); data.nombre = name; data.verificado = true;
+    const pid = await api('profile_save', { id: draft.id, new_id: name, data });
+    if (!pid) return;
+    await refreshProfiles();
+    if (confirm('¿Usar este perfil nuevo en todos los equipos que tenían “' + (PROF[old]?.nombre || old) + '”?')) {
+      for (const f of fixtures().filter((x) => x.profile === old)) await api('update_fixture', { id: f.id, profile: pid });
+    } else await api('update_fixture', { id: draftFor, profile: pid });
+    $('#newProfileName').value = '';
+    toast('Perfil nuevo guardado');
+  };
+  $('#rawVal').oninput = (e) => { $('#rawValOut').textContent = e.target.value; sendLatest('raw', 'test_set', { address: +$('#rawAddr').value, value: +e.target.value }); };
+  $('#rawAddr').onchange = () => { $('#rawVal').value = 0; $('#rawValOut').textContent = '0'; };
+
+  // show
+  $('#btnSaveAs').onclick = async () => { const n = $('#showName').value.trim(); if (n && await api('show_save_as', { name: n })) toast('Show guardado como “' + n + '”'); };
+  $('#showRows').addEventListener('click', async (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.showopen) { sel.clear(); lastScene = null; if (await api('show_load', { name: b.dataset.showopen })) toast('Show abierto'); }
+    if (b.dataset.showdel && confirm('¿Borrar el show “' + b.dataset.showdel + '”? No se puede deshacer.')) api('show_delete', { name: b.dataset.showdel });
+  });
+  const newShow = async (template) => {
+    const name = $('#newShowName').value.trim() || prompt('Nombre del show nuevo', 'Show nuevo');
+    if (!name) return;
+    sel.clear(); lastScene = null;
+    if (await api('show_new', { name, template })) { $('#newShowName').value = ''; toast('Show nuevo creado'); }
+  };
+  $('#btnNewMine').onclick = () => newShow('mi_equipo');
+  $('#btnNewEmpty').onclick = () => newShow('vacio');
+  $('#outKind').onchange = (e) => api('output_set', { kind: e.target.value });
+  $('#btnReconnect').onclick = () => api('output_set', { kind: $('#outKind').value }).then((ok) => ok && toast('Reconectando la interfaz'));
+  $('#remote').onchange = (e) => api('app_settings', { control_remoto: e.target.checked });
+  $('#btnQuit').onclick = () => { if (confirm('Se apagan todas las luces y se cierra el programa. ¿Seguro?')) api('quit'); };
+
+  // teclado
+  const holdKeys = { f: 'flash', s: 'strobe', h: 'humo' };
+  const isTyping = (e) => e.target.matches('input[type=text], input[type=number], textarea, select');
+  document.addEventListener('keydown', (e) => {
+    if (isTyping(e) || e.ctrlKey || e.metaKey || e.altKey) return;
+    const k = e.key.toLowerCase();
+    if (k === ' ') { e.preventDefault(); if (!e.repeat) api('go'); }
+    else if (/^[1-9]$/.test(k)) { const s = S.scenes[+k - 1]; if (s) recall(s.id); }
+    else if (k === 't' && !e.repeat) api('tap');
+    else if (k === 'b' && !e.repeat) api('blackout', { on: !S.blackout });
+    else if (k === 'a') applyGroup('all');
+    else if (k === 'escape') applyGroup('none');
+    else if (holdKeys[k] && !e.repeat) api('hold', { kind: holdKeys[k], on: true });
+  });
+  document.addEventListener('keyup', (e) => { const k = e.key.toLowerCase(); if (holdKeys[k]) api('hold', { kind: holdKeys[k], on: false }); });
+  // seguridad: si la ventana pierde el foco, se sueltan flash/strobo/humo
+  window.addEventListener('blur', () => { for (const k of ['flash', 'strobe', 'humo']) if (S && S.holds.includes(k)) api('hold', { kind: k, on: false }); });
+}
+
+function xyMove(e) {
+  const [x, y] = xyFromEvent(e);
+  const { movers, start, cx, cy } = xyDrag;
+  const values = {};
+  for (const i of movers) values[i] = [Math.min(1, Math.max(0, start[i][0] + x - cx)), Math.min(1, Math.max(0, start[i][1] + y - cy))];
+  sendLatest('xy', 'set_positions', { values });
+}
+
+async function refreshProfiles() {
+  const j = await (await fetch('/api/profiles')).json();
+  PROF = Object.fromEntries(j.map((p) => [p.id, p]));
+  for (const k of ['probar', 'patch', 'patchProfiles', 'tiles', 'slots']) sigs[k] = null;
+  onSync(S);
+}
+
+boot();

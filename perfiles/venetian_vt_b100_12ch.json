@@ -1,0 +1,156 @@
+{
+  "nombre": "Venetian VT-B100 (12 canales)",
+  "tipo": "cabezal",
+  "verificado": false,
+  "nota": "PERFIL A VERIFICAR: no hay tabla de canales publicada. Es el orden más común en beams 100W de 12 canales. Probalo canal por canal en 'Probar canales' y corregí lo que no coincida.",
+  "canales": [
+    {
+      "attr": "pan",
+      "label": "Pan"
+    },
+    {
+      "attr": "pan_fine",
+      "label": "Pan fino"
+    },
+    {
+      "attr": "tilt",
+      "label": "Tilt"
+    },
+    {
+      "attr": "tilt_fine",
+      "label": "Tilt fino"
+    },
+    {
+      "attr": "pt_speed",
+      "label": "Velocidad Pan/Tilt"
+    },
+    {
+      "attr": "intensity",
+      "label": "Dimmer"
+    },
+    {
+      "attr": "strobe",
+      "label": "Strobo"
+    },
+    {
+      "attr": "color_wheel",
+      "label": "Rueda de color"
+    },
+    {
+      "attr": "gobo",
+      "label": "Gobo"
+    },
+    {
+      "attr": "prism",
+      "label": "Prisma"
+    },
+    {
+      "attr": "prism_rotation",
+      "label": "Rotación de prisma"
+    },
+    {
+      "attr": "raw",
+      "label": "Reset / funciones",
+      "default": 0
+    }
+  ],
+  "strobe": {
+    "off": 0,
+    "min": 10,
+    "max": 255
+  },
+  "color_wheel": [
+    {
+      "nombre": "Blanco",
+      "dmx": 0,
+      "hex": "#ffffff"
+    },
+    {
+      "nombre": "Rojo",
+      "dmx": 18,
+      "hex": "#ff2020"
+    },
+    {
+      "nombre": "Naranja",
+      "dmx": 36,
+      "hex": "#ff8a1a"
+    },
+    {
+      "nombre": "Amarillo",
+      "dmx": 54,
+      "hex": "#ffe21a"
+    },
+    {
+      "nombre": "Verde",
+      "dmx": 72,
+      "hex": "#24e04a"
+    },
+    {
+      "nombre": "Azul",
+      "dmx": 90,
+      "hex": "#2a4dff"
+    },
+    {
+      "nombre": "Celeste",
+      "dmx": 108,
+      "hex": "#3fd7ff"
+    },
+    {
+      "nombre": "Rosa",
+      "dmx": 126,
+      "hex": "#ff5fc8"
+    }
+  ],
+  "gobo": [
+    {
+      "nombre": "Abierto",
+      "dmx": 0
+    },
+    {
+      "nombre": "Gobo 1",
+      "dmx": 14
+    },
+    {
+      "nombre": "Gobo 2",
+      "dmx": 28
+    },
+    {
+      "nombre": "Gobo 3",
+      "dmx": 42
+    },
+    {
+      "nombre": "Gobo 4",
+      "dmx": 56
+    },
+    {
+      "nombre": "Gobo 5",
+      "dmx": 70
+    },
+    {
+      "nombre": "Gobo 6",
+      "dmx": 84
+    },
+    {
+      "nombre": "Gobo 7",
+      "dmx": 98
+    },
+    {
+      "nombre": "Gobo 8",
+      "dmx": 112
+    },
+    {
+      "nombre": "Gobo 9",
+      "dmx": 126
+    }
+  ],
+  "prism": [
+    {
+      "nombre": "Sin prisma",
+      "dmx": 0
+    },
+    {
+      "nombre": "Prisma",
+      "dmx": 128
+    }
+  ]
+}

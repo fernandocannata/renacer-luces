@@ -1,0 +1,37 @@
+{
+  "nombre": "LED RGBW genérico (6 canales: dim, R, G, B, W, strobo)",
+  "tipo": "par",
+  "verificado": true,
+  "nota": "Orden típico de pares LED chinos de 6 canales.",
+  "canales": [
+    {
+      "attr": "intensity",
+      "label": "Dimmer"
+    },
+    {
+      "attr": "red",
+      "label": "Rojo"
+    },
+    {
+      "attr": "green",
+      "label": "Verde"
+    },
+    {
+      "attr": "blue",
+      "label": "Azul"
+    },
+    {
+      "attr": "white",
+      "label": "Blanco"
+    },
+    {
+      "attr": "strobe",
+      "label": "Strobo"
+    }
+  ],
+  "strobe": {
+    "off": 0,
+    "min": 10,
+    "max": 255
+  }
+}

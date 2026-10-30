@@ -1,0 +1,17 @@
+{
+  "nombre": "Tecshow Nebula Quad 14 (8 canales)",
+  "tipo": "par",
+  "verificado": true,
+  "nota": "Tabla de canales del manual oficial. En el equipo: menú '8Ch'.",
+  "canales": [
+    {"attr": "intensity", "label": "Dimmer general"},
+    {"attr": "red", "label": "Rojo"},
+    {"attr": "green", "label": "Verde"},
+    {"attr": "blue", "label": "Azul"},
+    {"attr": "white", "label": "Blanco"},
+    {"attr": "strobe", "label": "Strobo"},
+    {"attr": "raw", "label": "Función (0-3 = control DMX)", "default": 0},
+    {"attr": "raw", "label": "Velocidad de función", "default": 0}
+  ],
+  "strobe": {"off": 0, "min": 10, "max": 255}
+}

@@ -1,0 +1,20 @@
+{
+  "nombre": "LED RGB genérico (3 canales)",
+  "tipo": "par",
+  "verificado": true,
+  "nota": "Rojo, verde, azul.",
+  "canales": [
+    {
+      "attr": "red",
+      "label": "Rojo"
+    },
+    {
+      "attr": "green",
+      "label": "Verde"
+    },
+    {
+      "attr": "blue",
+      "label": "Azul"
+    }
+  ]
+}

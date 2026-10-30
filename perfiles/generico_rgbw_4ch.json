@@ -1,0 +1,24 @@
+{
+  "nombre": "LED RGBW genérico (4 canales)",
+  "tipo": "par",
+  "verificado": true,
+  "nota": "Rojo, verde, azul, blanco.",
+  "canales": [
+    {
+      "attr": "red",
+      "label": "Rojo"
+    },
+    {
+      "attr": "green",
+      "label": "Verde"
+    },
+    {
+      "attr": "blue",
+      "label": "Azul"
+    },
+    {
+      "attr": "white",
+      "label": "Blanco"
+    }
+  ]
+}

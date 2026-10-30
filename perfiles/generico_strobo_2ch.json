@@ -1,0 +1,21 @@
+{
+  "nombre": "Strobo genérico (2 canales)",
+  "tipo": "strobo",
+  "verificado": true,
+  "nota": "Canal 1 intensidad, canal 2 velocidad. Revisá el manual de tu strobo.",
+  "canales": [
+    {
+      "attr": "intensity",
+      "label": "Intensidad"
+    },
+    {
+      "attr": "strobe",
+      "label": "Velocidad"
+    }
+  ],
+  "strobe": {
+    "off": 0,
+    "min": 1,
+    "max": 255
+  }
+}
