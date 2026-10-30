@@ -1,4 +1,4 @@
-name: Armar RenacerLuces.exe
+name: Armar RenacerLightShow.exe
 
 on:
   push:
@@ -23,15 +23,15 @@ jobs:
 
       - name: Armar el .exe
         run: >
-          pyinstaller --noconfirm --onefile --noconsole --name RenacerLuces
+          pyinstaller --noconfirm --onefile --noconsole --name RenacerLightShow --icon icono.ico
           --add-data "web;web" --add-data "perfiles;perfiles"
           --hidden-import serial.tools.list_ports
           renacer_luces.py
 
       - uses: actions/upload-artifact@v4
         with:
-          name: RenacerLuces-windows
-          path: dist/RenacerLuces.exe
+          name: RenacerLightShow-windows
+          path: dist/RenacerLightShow.exe
 
   publicar:
     needs: build
@@ -41,23 +41,23 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: RenacerLuces-windows
+          name: RenacerLightShow-windows
           path: out
 
       - name: Publicar en "Releases" (descarga fija)
         env:
           GH_TOKEN: ${{ github.token }}
         run: >
-          gh release create "build-${{ github.run_number }}" out/RenacerLuces.exe
+          gh release create "build-${{ github.run_number }}" out/RenacerLightShow.exe
           --repo "${{ github.repository }}" --latest
-          --title "Renacer Luces (versión ${{ github.run_number }})"
-          --notes "Descargá RenacerLuces.exe y abrilo. No necesita instalar nada."
+          --title "Renacer LightShow (versión ${{ github.run_number }})"
+          --notes "Descargá RenacerLightShow.exe y abrilo. No necesita instalar nada."
 
       - name: Guardar el .exe en la rama "exe"
         run: |
           cd out
           git init -q -b exe
-          git add RenacerLuces.exe
+          git add RenacerLightShow.exe
           git -c user.name=github-actions -c user.email=41898282+github-actions[bot]@users.noreply.github.com \
-            commit -q -m "RenacerLuces.exe (versión ${{ github.run_number }})"
+            commit -q -m "RenacerLightShow.exe (versión ${{ github.run_number }})"
           git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" exe

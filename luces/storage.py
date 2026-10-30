@@ -2,6 +2,7 @@
 import json
 import os
 import re
+import shutil
 import sys
 
 
@@ -13,7 +14,7 @@ def base_dir():
 
 
 def data_dir():
-    """Carpeta de datos del usuario: Documentos/Renacer Luces."""
+    """Carpeta de datos del usuario: Documentos/Renacer LightShow."""
     override = os.environ.get("RENACER_LUCES_DATA")
     if override:
         d = override
@@ -22,7 +23,13 @@ def data_dir():
         docs = os.path.join(home, "Documents")
         if not os.path.isdir(docs):
             docs = os.path.join(home, "Documentos") if os.path.isdir(os.path.join(home, "Documentos")) else home
-        d = os.path.join(docs, "Renacer Luces")
+        d = os.path.join(docs, "Renacer LightShow")
+        old = os.path.join(docs, "Renacer Luces")  # nombre anterior del programa
+        if not os.path.exists(d) and os.path.isdir(old):
+            try:
+                shutil.copytree(old, d)  # se copia: la carpeta vieja queda como respaldo
+            except Exception as e:
+                print("No se pudieron traer los datos de 'Renacer Luces':", e)
     for sub in ("", "shows", "perfiles"):
         os.makedirs(os.path.join(d, sub), exist_ok=True)
     return d
@@ -39,12 +46,14 @@ class Storage:
         self.shows_dir = os.path.join(self.dir, "shows")
         self.user_profiles_dir = os.path.join(self.dir, "perfiles")
         self.settings_path = os.path.join(self.dir, "ajustes.json")
-        self.settings = {"ultimo_show": "Mi show", "salida": "auto", "control_remoto": False, "puerto": 8730}
+        self.settings = {"ultimo_show": "Mi show", "salida": "auto", "control_remoto": False, "puerto": 8731}
         try:
             with open(self.settings_path, encoding="utf-8") as f:
                 self.settings.update(json.load(f))
         except Exception:
             pass
+        if self.settings.get("puerto") == 8730:  # puerto de "Renacer Luces": se cambia para no chocar con la versión vieja
+            self.settings["puerto"] = 8731
 
     def save_settings(self):
         self._atomic_write(self.settings_path, self.settings)

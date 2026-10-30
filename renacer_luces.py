@@ -1,4 +1,4 @@
-"""Renacer Luces — control de iluminación simple para la PC.
+"""Renacer LightShow — control de iluminación simple para la PC.
 
 Uso:
     python renacer_luces.py            abre el programa
@@ -37,7 +37,7 @@ def open_window(url):
                 try:
                     subprocess.Popen([exe, "--app=" + url, "--window-size=1400,880",
                                       "--user-data-dir=" + os.path.join(os.environ.get("LOCALAPPDATA", "."),
-                                                                         "RenacerLuces", "ventana")])
+                                                                         "RenacerLightShow", "ventana")])
                     return
                 except Exception:
                     pass

@@ -13,8 +13,8 @@ from .engine import FX_TYPES, Engine
 from .fixtures import CHANNEL_ATTRS, PALETTE, Library
 from .storage import Storage, base_dir, default_show, safe_name
 
-APP_NAME = "Renacer Luces"
-APP_VERSION = "0.1"
+APP_NAME = "Renacer LightShow"
+APP_VERSION = "0.2"
 
 
 def lan_ip():
@@ -253,7 +253,7 @@ class App:
 def make_handler(app):
     class Handler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
-        server_version = "RenacerLuces/" + APP_VERSION
+        server_version = "RenacerLightShow/" + APP_VERSION
 
         def log_message(self, fmt, *args):
             pass  # silencioso

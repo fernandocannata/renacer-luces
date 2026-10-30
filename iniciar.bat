@@ -1,6 +1,6 @@
 @echo off
 chcp 65001 >nul
-title Renacer Luces
+title Renacer LightShow
 cd /d "%~dp0"
 
 where py >nul 2>nul
@@ -16,7 +16,7 @@ if %errorlevel%==0 (
 
 echo.
 echo  No se encontro Python en esta computadora.
-echo  Opcion 1: usa RenacerLuces.exe (no necesita Python).
+echo  Opcion 1: usa RenacerLightShow.exe (no necesita Python).
 echo  Opcion 2: instala Python desde https://www.python.org/downloads/
 echo            (marca "Add python.exe to PATH" al instalar) y volve a abrir este archivo.
 echo.

@@ -3,14 +3,16 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="#16131f">
-<title>Renacer Luces</title>
+<meta name="theme-color" content="#0f0c13">
+<title>Renacer LightShow</title>
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="apple-touch-icon" href="icono.png">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
 <header id="top">
-  <div id="brand"><span class="lamp"></span>Renacer Luces</div>
+  <div id="brand"><img src="icono.png" alt="">Renacer LightShow</div>
   <button id="out" title="Estado de la interfaz DMX"><span class="dot"></span><span id="outLbl">Conectando…</span></button>
 
   <div class="topgroup" title="Tempo para los efectos">
@@ -47,7 +49,7 @@
   <!-- ======================================================= OPERAR -->
   <section id="operar" class="view on">
     <div class="col">
-      <div class="colhead"><h2>Equipos</h2><span class="hint" id="selCount"></span></div>
+      <div class="colhead"><h2>Escenario</h2><span class="hint" id="selCount"></span></div>
       <div class="chips" id="groupChips"></div>
       <div id="tileGroups"></div>
     </div>
@@ -141,6 +143,7 @@
       <div class="colhead" style="margin-top:22px"><h2>Secuencia</h2>
         <label class="hint row" style="gap:6px"><input type="checkbox" id="cueLoop"> Repetir al terminar</label>
       </div>
+      <div class="standby" id="standby"><span class="lamp"></span><span id="nextCue">Sin pasos en la secuencia</span></div>
       <button id="go" title="Siguiente paso (barra espaciadora)">GO</button>
       <div class="row"><button class="ghost grow" id="btnBack">Atrás</button><button class="ghost grow" id="btnStopCues">Parar</button></div>
       <ol class="cues" id="cues"></ol>

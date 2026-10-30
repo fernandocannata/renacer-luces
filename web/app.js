@@ -1,5 +1,5 @@
 'use strict';
-/* Renacer Luces — interfaz */
+/* Renacer LightShow — interfaz */
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -117,15 +117,21 @@ function onSync(s) {
 
 function onLive(d) {
   LIVE = d;
+  let smoke = 0;
   for (const t of $$('.tile')) {
     const p = d.pv[t.dataset.id];
     if (!p) continue;
     t.style.setProperty('--c', p.c);
     t.style.setProperty('--d', p.d);
     t.classList.toggle('strobing', p.s > 0.01 && p.d > 0.02);
-    const aim = $('.aim', t);
-    if (aim && p.p != null) { aim.style.left = (12 + p.p * 76) + '%'; aim.style.top = (8 + (1 - (p.t ?? 0.5)) * 64) + '%'; }
+    if (t.classList.contains('t-humo')) smoke = Math.max(smoke, p.d);
+    if (p.p != null) {
+      t.style.setProperty('--rot', (-(p.p - 0.5) * 110).toFixed(1) + 'deg');
+      t.style.setProperty('--tl', (0.55 + 0.45 * (p.t ?? 0.5)).toFixed(3));
+    }
   }
+  const st = $('.stage');
+  if (st) st.style.setProperty('--smoke', smoke.toFixed(2));
   $('#beat').classList.toggle('hit', d.beat < 0.15);
   renderOut(d.out);
   if (S && d.cue !== S.cue_index) { S.cue_index = d.cue; sigs.cues = null; renderCues(); }
@@ -161,13 +167,21 @@ function renderTiles() {
     const groups = {};
     for (const f of fixtures()) (groups[typeOf(f.id)] ||= []).push(f);
     const types = Object.keys(groups).sort((a, b) => TYPE_ORDER.indexOf(a) - TYPE_ORDER.indexOf(b));
-    $('#tileGroups').innerHTML = types.length ? types.map((t) => `
-      <div class="fgroup"><h3>${esc(TYPE_LABEL[t] || t)}</h3><div class="tiles">
-      ${groups[t].map((f, i) => `<button class="tile ${capsOf(f.id).has('mover') ? 'mover' : ''}" data-id="${f.id}" title="${esc(f.name)} — dirección ${f.address}">
-          <span class="num">${i + 1}</span><span class="glow"></span>${capsOf(f.id).has('mover') ? '<span class="aim"></span>' : ''}
-          <span class="nm">${esc(f.name)}</span></button>`).join('')}
-      </div></div>`).join('')
-      : `<div class="emptysel">Todavía no hay equipos. Agregalos en “Equipos y direcciones”.</div>`;
+    const rigTypes = types.filter((t) => t !== 'humo');
+    const tileHtml = (f, i) => {
+      const t = typeOf(f.id), mover = capsOf(f.id).has('mover');
+      return `<button class="tile t-${t} ${mover ? 'mover' : ''}" data-id="${f.id}" title="${esc(f.name)} — dirección ${f.address}">
+          <span class="beam"></span>${fixtureSvg(t, mover)}<span class="nm">${i + 1}</span></button>`;
+    };
+    $('#tileGroups').innerHTML = types.length ? `
+      <div class="stage">
+        <div class="haze"></div><div class="valance"></div><div class="leg l"></div><div class="leg r"></div>
+        ${rigTypes.map((t) => `<div class="rig"><div class="truss"><span class="tag">${esc(TYPE_LABEL[t] || t)}</span></div>
+            <div class="fixrow">${groups[t].map(tileHtml).join('')}</div></div>`).join('')}
+        <div class="apron">${groups.humo ? `<div class="rig floor-rig"><div class="fixrow">${groups.humo.map(tileHtml).join('')}</div></div>` : ''}</div>
+      </div>`
+      : `<div class="emptysel">El escenario está vacío. Agregá tus equipos en “Equipos y direcciones”.</div>`;
+    layoutBeams();
     const present = new Set(fixtures().map((f) => typeOf(f.id)));
     $('#groupChips').innerHTML = [
       ['all', 'Todos'],
@@ -178,6 +192,30 @@ function renderTiles() {
   }
   paintSelection();
 }
+
+/* dibujo de cada equipo colgado en la vara */
+function fixtureSvg(type, mover) {
+  const clamp = '<rect x="17" y="0" width="6" height="5" rx="1" class="clamp"/>';
+  let g;
+  if (mover) g = clamp + '<path d="M7 5h26v19a4 4 0 0 1-4 4h-2V12H13v16h-2a4 4 0 0 1-4-4z" class="metal"/>'
+    + '<rect x="12.5" y="10" width="15" height="21" rx="5" class="metal2"/><ellipse cx="20" cy="31" rx="5.5" ry="2.6" class="lens"/>';
+  else if (type === 'strobo') g = clamp + '<rect x="3" y="6" width="34" height="15" rx="3" class="metal2"/><rect x="6" y="15" width="28" height="6" rx="2" class="lens"/>';
+  else if (type === 'humo') g = '<rect x="3" y="12" width="30" height="18" rx="3" class="metal2"/><rect x="33" y="18" width="5" height="6" rx="1" class="metal"/><circle cx="12" cy="21" r="3" class="lens"/>';
+  else g = clamp + '<path d="M11 5h18l3 22H8z" class="metal2"/><ellipse cx="20" cy="27.5" rx="12.5" ry="3.6" class="lens"/>';
+  return `<svg class="body" viewBox="0 0 40 34" aria-hidden="true">${g}</svg>`;
+}
+
+/* largo de cada haz: desde la lente hasta el piso del escenario */
+function layoutBeams() {
+  const st = $('.stage');
+  if (!st) return;
+  const floor = st.querySelector('.apron').getBoundingClientRect().top + 64;
+  for (const t of $$('.tile', st)) {
+    const r = t.getBoundingClientRect();
+    t.style.setProperty('--len', Math.max(40, floor - r.top - 30) + 'px');
+  }
+}
+window.addEventListener('resize', () => layoutBeams());
 
 function paintSelection() {
   for (const t of $$('.tile')) t.classList.toggle('sel', sel.has(t.dataset.id));
@@ -333,7 +371,7 @@ function recall(id) { lastScene = id; sigs.scenes = null; api('recall_scene', { 
 /* ------------------------------------------------------------ secuencia */
 function renderCues() {
   setVal($('#cueLoop'), S.settings.cue_loop);
-  if (!changed('cues', [S.cues, S.cue_index, S.scenes.map((s) => [s.id, s.name])])) return;
+  if (!changed('cues', [S.cues, S.cue_index, S.settings.cue_loop, S.scenes.map((s) => [s.id, s.name])])) return;
   const opts = (cur) => S.scenes.map((s) => `<option value="${s.id}" ${s.id === cur ? 'selected' : ''}>${esc(s.name)}</option>`).join('');
   $('#cues').innerHTML = S.cues.length ? S.cues.map((c, i) => `
     <li class="cue ${i === S.cue_index ? 'cur' : ''}">
@@ -349,6 +387,12 @@ function renderCues() {
         <button class="ghost small danger" data-cuedel="${c.id}" title="Quitar paso">✕</button>
       </div></li>`).join('') : '<p class="hint">La secuencia está vacía. Agregá pasos con escenas ya guardadas.</p>';
   $('#go').textContent = S.cue_index >= 0 && S.cues.length ? `GO  ${Math.min(S.cue_index + 2, S.cues.length)}/${S.cues.length}` : 'GO';
+  const nextIdx = S.cue_index + 1 < S.cues.length ? S.cue_index + 1 : (S.settings.cue_loop && S.cues.length ? 0 : -1);
+  const nextCue = S.cues[nextIdx];
+  const nextName = nextCue ? (S.scenes.find((x) => x.id === nextCue.scene)?.name || 'Escena') : '';
+  $('#standby').classList.toggle('armed', !!nextCue);
+  $('#nextCue').innerHTML = nextCue ? `Standby: <b>${nextIdx + 1}. ${esc(nextName)}</b>`
+    : (S.cues.length ? 'Fin de la secuencia' : 'Sin pasos en la secuencia');
 }
 
 /* ------------------------------------------------------------ posiciones */

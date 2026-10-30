@@ -1,4 +1,4 @@
-# Renacer Luces
+# Renacer LightShow
 
 Control de iluminación simple para la PC, pensado para eventos sociales.
 Maneja cabezales móviles, pares LED, strobos y máquina de humo con una
@@ -20,7 +20,7 @@ Lo que importa es que coincidan con las que figuran en el display de cada equipo
    QLC+ o FreeStyler, el driver ya está instalado. Si no, bajalo de la sección
    Descargas de electrotas.com.ar o de ftdichip.com (driver "CDM" / D2XX).
 2. **Abrir el programa**, de una de estas dos formas:
-   - `RenacerLuces.exe` (no necesita nada más), o
+   - `RenacerLightShow.exe` (no necesita nada más), o
    - `iniciar.bat`, si tenés Python 3.9 o más nuevo instalado.
 3. Se abre una ventana. Arriba a la izquierda tiene que decir
    **Interfaz conectada** en verde. Si dice "Simulador" o "no encontrada",
@@ -89,8 +89,10 @@ dirección que aparece ahí.
 
 ## Dónde se guarda todo
 
-En `Documentos\Renacer Luces`: los shows (`shows\`), tus perfiles de equipos
+En `Documentos\Renacer LightShow`: los shows (`shows\`), tus perfiles de equipos
 (`perfiles\`) y los ajustes. El show se guarda solo cada pocos segundos.
+Si venías usando la versión anterior (Renacer Luces), la primera vez se
+copian solos tus shows y perfiles desde `Documentos\Renacer Luces`.
 
 ## Sumar equipos
 
@@ -103,7 +105,8 @@ no coincide, se ajusta en **Probar canales** y se guarda como perfil nuevo.
 - Sin dependencias obligatorias: solo la biblioteca estándar de Python.
 - `python renacer_luces.py --sim` corre sin interfaz.
 - `python -m pytest tests` corre las pruebas.
-- Cada push a `main` arma `RenacerLuces.exe` con GitHub Actions.
+- Cada push a `main` arma `RenacerLightShow.exe` con GitHub Actions.
+- El ícono se regenera con `python herramientas/hacer_icono.py` (necesita Pillow y numpy).
 
 Estructura: `luces/engine.py` (motor: estado, fundidos, efectos, escenas),
 `luces/dmx_output.py` (salida Open DMX por FTDI), `luces/server.py` (servidor
