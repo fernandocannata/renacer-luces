@@ -37,7 +37,8 @@ class App:
         self.library = Library(os.path.join(root, "perfiles"), self.storage.user_profiles_dir)
         show = self._initial_show()
         self.engine = Engine(self.library, show)
-        self.output = create_output(output_kind or self.storage.settings.get("salida", "auto"))
+        self.output = create_output(output_kind or self.storage.settings.get("salida", "auto"),
+                                    self.storage.settings.get("dmx_ritmo", "normal"))
         self.output.start()
         self.saved_version = self.engine.version
         self.last_save = time.monotonic()
@@ -246,12 +247,14 @@ class App:
             self.storage.delete_show(c["name"])
             e.changed()
         elif cmd == "output_set":
-            kind = c.get("kind", "auto")
+            kind = c.get("kind") or self.storage.settings.get("salida", "auto")
+            rate = c.get("rate") or self.storage.settings.get("dmx_ritmo", "normal")
             old = self.output
             old.stop()
-            self.output = create_output(kind)
+            self.output = create_output(kind, rate)
             self.output.start()
             self.storage.settings["salida"] = kind
+            self.storage.settings["dmx_ritmo"] = rate
             self.storage.save_settings()
             e.changed()
         elif cmd == "app_settings":

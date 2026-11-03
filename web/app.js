@@ -170,7 +170,7 @@ function renderOut(o) {
   b.className = o.kind === 'sim' ? 'sim' : o.connected ? 'ok' : 'err';
   $('#outLbl').textContent = o.kind === 'sim' ? 'Simulador' : o.connected ? 'Interfaz conectada' : 'Interfaz no encontrada';
   const det = $('#outDetail');
-  if (det) det.textContent = o.label + (o.connected ? ' — enviando.' : '') + (o.error ? ' ' + o.error : '');
+  if (det) det.textContent = o.label + (o.connected ? ` — enviando ${Math.round(o.fps || 0)} cuadros por segundo.` : '') + (o.error ? ' ' + o.error : '');
 }
 
 /* ------------------------------------------------------------ equipos */
@@ -607,6 +607,7 @@ function renderShow() {
   $('#dataDir').textContent = INIT.data_dir;
   if (S.app_settings) {
     setVal($('#outKind'), S.app_settings.salida || 'auto');
+    setVal($('#outRate'), S.app_settings.dmx_ritmo || 'normal');
     setVal($('#remote'), S.app_settings.control_remoto);
     $('#remoteHint').textContent = S.app_settings.control_remoto
       ? `Activado. Si recién lo prendiste, cerrá y volvé a abrir el programa. Después, en el celular (misma Wi-Fi) abrí ${INIT.lan}`
@@ -909,6 +910,7 @@ function buildStatic() {
   $('#btnNewMine').onclick = () => newShow('mi_equipo');
   $('#btnNewEmpty').onclick = () => newShow('vacio');
   $('#outKind').onchange = (e) => api('output_set', { kind: e.target.value });
+  $('#outRate').onchange = (e) => api('output_set', { rate: e.target.value }).then((ok) => ok && toast('Ritmo de envío cambiado'));
   $('#btnReconnect').onclick = () => api('output_set', { kind: $('#outKind').value }).then((ok) => ok && toast('Reconectando la interfaz'));
   $('#remote').onchange = (e) => api('app_settings', { control_remoto: e.target.checked });
   $('#btnQuit').onclick = () => { if (confirm('Se apagan todas las luces y se cierra el programa. ¿Seguro?')) api('quit'); };

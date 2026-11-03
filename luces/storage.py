@@ -46,7 +46,8 @@ class Storage:
         self.shows_dir = os.path.join(self.dir, "shows")
         self.user_profiles_dir = os.path.join(self.dir, "perfiles")
         self.settings_path = os.path.join(self.dir, "ajustes.json")
-        self.settings = {"ultimo_show": "Mi show", "salida": "auto", "control_remoto": False, "puerto": 8731}
+        self.settings = {"ultimo_show": "Mi show", "salida": "auto", "control_remoto": False, "puerto": 8731,
+                         "dmx_ritmo": "normal"}
         try:
             with open(self.settings_path, encoding="utf-8") as f:
                 self.settings.update(json.load(f))

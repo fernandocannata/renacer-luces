@@ -51,6 +51,8 @@ def main():
     ap.add_argument("--sin-ventana", action="store_true", help="no abrir la ventana")
     args = ap.parse_args()
 
+    # el hilo que manda el DMX no debe esperar a los demás más de 1 ms
+    sys.setswitchinterval(0.001)
     app = App(output_kind="sim" if args.sim else None)
     port = args.puerto or int(app.storage.settings.get("puerto", 8730))
     url = "http://127.0.0.1:%d/" % port

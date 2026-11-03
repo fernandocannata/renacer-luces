@@ -17,20 +17,42 @@ import sys
 import threading
 import time
 
-FRAME_PERIOD = 1.0 / 35      # ~35 cuadros por segundo (máximo físico ~44)
 BREAK_S = 0.00015            # >88 µs
 MAB_S = 0.00002              # >8 µs
+# Un cuadro completo (código de inicio + 512 canales, 11 bits por byte a 250 kbaud)
+# tarda ~22,6 ms en salir por el cable. El próximo BREAK nunca puede llegar antes:
+# si llega, corta el cuadro y lo que quedaba en el buffer de la interfaz se cuela
+# al comienzo del siguiente, corriendo todos los canales (equipos "locos" o reseteos).
+TX_TIME = 513 * 11 / 250000.0
+TX_MARGIN = 0.004            # margen por el buffer interno del chip y el USB
+RATES = {"normal": 30.0, "seguro": 20.0}
+
+
+def _hires_timer(on):
+    """En Windows, pide timers de 1 ms para que las esperas sean precisas."""
+    if not sys.platform.startswith("win"):
+        return
+    try:
+        winmm = ctypes.WinDLL("winmm")
+        (winmm.timeBeginPeriod if on else winmm.timeEndPeriod)(1)
+    except Exception:
+        pass
 
 
 class BaseOutput:
     kind = "base"
     label = "Salida"
 
-    def __init__(self):
+    def __init__(self, rate="normal"):
         self._frame = bytes(512)
         self.connected = False
         self.error = ""
         self.frames_sent = 0
+        self.rate = rate if rate in RATES else "normal"
+        self.period = 1.0 / RATES[self.rate]
+        self.tx_done_at = 0.0     # cuándo termina de salir el último cuadro enviado
+        self.fps = 0.0
+        self._fps_count, self._fps_t = 0, time.perf_counter()
         self._stop = threading.Event()
         self._thread = None
 
@@ -52,30 +74,49 @@ class BaseOutput:
 
     def status(self):
         return {"kind": self.kind, "label": self.label, "connected": self.connected,
-                "error": self.error, "frames": self.frames_sent}
+                "error": self.error, "frames": self.frames_sent, "fps": round(self.fps, 1),
+                "rate": self.rate}
 
     def _run(self):
-        next_t = time.perf_counter()
-        while not self._stop.is_set():
-            if not self.connected:
-                if not self._try_open():
-                    self._stop.wait(1.5)
-                    continue
-                next_t = time.perf_counter()
+        _hires_timer(True)
+        if sys.platform.startswith("win"):  # que Windows no lo postergue
             try:
-                self._send(self._frame)
-                self.frames_sent += 1
-            except Exception as e:  # interfaz desenchufada, etc.
-                self.error = "Se perdió la interfaz: %s" % e
-                self.connected = False
-                self.close()
-                continue
-            next_t += FRAME_PERIOD
-            delay = next_t - time.perf_counter()
-            if delay > 0:
-                time.sleep(delay)
-            else:
-                next_t = time.perf_counter()
+                k32 = ctypes.WinDLL("kernel32")
+                k32.SetThreadPriority(k32.GetCurrentThread(), 2)  # THREAD_PRIORITY_HIGHEST
+            except Exception:
+                pass
+        last_start = 0.0
+        try:
+            while not self._stop.is_set():
+                if not self.connected:
+                    if not self._try_open():
+                        self._stop.wait(1.5)
+                        continue
+                # el próximo cuadro empieza recién cuando el anterior terminó de salir
+                # y pasó el período elegido, medido desde el comienzo real del anterior
+                wait_until = max(last_start + self.period, self.tx_done_at + TX_MARGIN)
+                delay = wait_until - time.perf_counter()
+                if delay > 0:
+                    time.sleep(delay)
+                    continue  # vuelve a chequear (la espera pudo cortarse antes)
+                try:
+                    last_start = time.perf_counter()
+                    self._send(self._frame)
+                    self.frames_sent += 1
+                    self._count_fps()
+                except Exception as e:  # interfaz desenchufada, etc.
+                    self.error = "Se perdió la interfaz: %s" % e
+                    self.connected = False
+                    self.close()
+        finally:
+            _hires_timer(False)
+
+    def _count_fps(self):
+        self._fps_count += 1
+        now = time.perf_counter()
+        if now - self._fps_t >= 1.0:
+            self.fps = self._fps_count / (now - self._fps_t)
+            self._fps_count, self._fps_t = 0, now
 
     def _try_open(self):
         return False
@@ -94,7 +135,7 @@ class SimOutput(BaseOutput):
         return True
 
     def _send(self, frame):
-        time.sleep(0)  # no hace nada: solo cuenta cuadros
+        self.tx_done_at = time.perf_counter() + TX_TIME  # simula el tiempo de cable
 
 
 # ------------------------------------------------------------- D2XX ---
@@ -128,8 +169,8 @@ class D2xxOutput(BaseOutput):
     kind = "d2xx"
     label = "Interfaz USB-DMX (driver FTDI)"
 
-    def __init__(self, device_index=0):
-        super().__init__()
+    def __init__(self, device_index=0, rate="normal"):
+        super().__init__(rate)
         self.lib = _load_d2xx()
         self.index = device_index
         self.handle = ctypes.c_void_p()
@@ -179,15 +220,33 @@ class D2xxOutput(BaseOutput):
             self.close()
             return False
 
+    def _tx_queue(self):
+        rx, tx, ev = ctypes.c_ulong(0), ctypes.c_ulong(0), ctypes.c_ulong(0)
+        try:
+            if self.lib.FT_GetStatus(self.handle, ctypes.byref(rx), ctypes.byref(tx), ctypes.byref(ev)) == FT_OK:
+                return tx.value
+        except Exception:
+            pass
+        return 0
+
     def _send(self, frame):
         data = b"\x00" + frame
         buf = ctypes.create_string_buffer(data, len(data))
         written = ctypes.c_ulong(0)
+        # seguridad extra: si el driver todavía tiene bytes del cuadro anterior, esperar
+        limit = time.perf_counter() + 0.1
+        while self._tx_queue() > 0 and time.perf_counter() < limit:
+            time.sleep(0.001)
         self._ck(self.lib.FT_SetBreakOn(self.handle), "Break")
         time.sleep(BREAK_S)
         self._ck(self.lib.FT_SetBreakOff(self.handle), "Break")
         time.sleep(MAB_S)
+        t0 = time.perf_counter()
         self._ck(self.lib.FT_Write(self.handle, buf, ctypes.c_ulong(len(data)), ctypes.byref(written)), "Envío")
+        if written.value != len(data):
+            raise IOError("la interfaz aceptó %d de %d bytes" % (written.value, len(data)))
+        # FT_Write vuelve enseguida: los bytes siguen saliendo por el cable ~22,6 ms más
+        self.tx_done_at = t0 + TX_TIME
 
     def close(self):
         if self.lib is not None and self.handle and self.handle.value:
@@ -204,8 +263,8 @@ class SerialOutput(BaseOutput):
     kind = "serial"
     label = "Interfaz USB-DMX (puerto COM)"
 
-    def __init__(self, port=None):
-        super().__init__()
+    def __init__(self, port=None, rate="normal"):
+        super().__init__(rate)
         self.port = port
         self.ser = None
 
@@ -243,8 +302,10 @@ class SerialOutput(BaseOutput):
         time.sleep(BREAK_S)
         self.ser.break_condition = False
         time.sleep(MAB_S)
+        t0 = time.perf_counter()
         self.ser.write(b"\x00" + frame)
         self.ser.flush()
+        self.tx_done_at = max(t0 + TX_TIME, time.perf_counter())
 
     def close(self):
         if self.ser:
@@ -256,19 +317,19 @@ class SerialOutput(BaseOutput):
         self.connected = False
 
 
-def create_output(kind="auto"):
+def create_output(kind="auto", rate="normal"):
     """Crea la salida pedida. 'auto' prueba la interfaz real y si no hay, simula."""
     if kind == "sim":
-        return SimOutput()
+        return SimOutput(rate)
     if kind == "serial":
-        return SerialOutput()
+        return SerialOutput(rate=rate)
     if kind == "d2xx":
-        return D2xxOutput()
+        return D2xxOutput(rate=rate)
     if D2xxOutput.available():
-        return D2xxOutput()
+        return D2xxOutput(rate=rate)
     if SerialOutput.find_ports():
-        return SerialOutput()
+        return SerialOutput(rate=rate)
     if _load_d2xx() is not None:
         # hay driver pero la interfaz no está enchufada: queda esperando que aparezca
-        return D2xxOutput()
-    return SimOutput()
+        return D2xxOutput(rate=rate)
+    return SimOutput(rate)
