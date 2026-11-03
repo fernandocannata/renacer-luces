@@ -145,6 +145,7 @@ function onLive(d) {
   const st = $('.stage');
   if (st) st.style.setProperty('--smoke', smoke.toFixed(2));
   $('#beat').classList.toggle('hit', d.beat < 0.15);
+  if (d.sync) renderSync(d.sync);
   renderOut(d.out);
   if (S && d.cue !== S.cue_index) { S.cue_index = d.cue; sigs.cues = null; renderCues(); }
   drawXYPoints();
@@ -172,6 +173,24 @@ function renderOut(o) {
   $('#outLbl').textContent = o.kind === 'sim' ? 'Simulador' : o.connected ? 'Interfaz conectada' : 'Interfaz no encontrada';
   const det = $('#outDetail');
   if (det) det.textContent = o.label + (o.connected ? ` — enviando ${Math.round(o.fps || 0)} cuadros por segundo.` : '') + (o.error ? ' ' + o.error : '');
+}
+
+/* ------------------------------------------------------------ tempo desde VirtualDJ */
+function renderSync(sy) {
+  const b = $('#btnSync');
+  const state = !sy.on ? 'off' : sy.beats ? 'live' : 'wait';
+  b.className = 'syncbtn ' + state;
+  b.setAttribute('aria-pressed', sy.on);
+  const msg = !sy.on ? 'Apagado: el tempo lo marcás vos con Tap.'
+    : sy.beats ? `Siguiendo a VirtualDJ${sy.bpm ? ' (' + sy.bpm.toFixed(1) + ' BPM)' : ''}.`
+    : sy.connected ? 'VirtualDJ conectado: esperando que suene un tema.'
+    : sy.listening ? 'Esperando a VirtualDJ. Revisá que esté configurado (ver Show y ajustes).'
+    : (sy.error || 'No se pudo abrir la conexión.');
+  b.title = 'Seguir el tempo de VirtualDJ. ' + msg;
+  $('#btnTap').disabled = !!sy.on;
+  $('#btnTap').title = sy.on ? 'Con VDJ prendido, el tempo lo marca VirtualDJ' : 'Tocá al ritmo de la música (tecla T)';
+  $('#syncDetail').textContent = (sy.connected ? 'Estado: VirtualDJ conectado. ' : 'Estado: VirtualDJ no conectado. ') + msg;
+  $('#syncPort').textContent = sy.port;
 }
 
 /* ------------------------------------------------------------ strobo 2 */
@@ -746,6 +765,11 @@ function buildStatic() {
 
   // barra superior
   $('#btnTap').onclick = () => api('tap');
+  $('#btnSync').onclick = async () => {
+    const on = !S.sync_ext;
+    if (await api('sync_set', { on })) toast(on ? 'El tempo sigue a VirtualDJ' : 'Tempo manual: usá Tap');
+  };
+  renderSync(INIT.sync);
   $('#fade').oninput = (e) => { $('#fadeVal').textContent = (+e.target.value).toFixed(1) + ' s'; sendLatest('fade', 'show_settings', { fade: +e.target.value }); };
   $('#master').oninput = (e) => { $('#masterVal').textContent = pct(+e.target.value); sendLatest('master', 'master', { value: +e.target.value }); };
   $('#btnBlackout').onclick = () => api('blackout', { on: !S.blackout });
@@ -1094,7 +1118,7 @@ function buildStatic() {
     const k = e.key.toLowerCase();
     if (k === ' ') { e.preventDefault(); if (!e.repeat) api('go'); }
     else if (/^[1-9]$/.test(k)) { const s = S.scenes[+k - 1]; if (s) recall(s.id); }
-    else if (k === 't' && !e.repeat) api('tap');
+    else if (k === 't' && !e.repeat && !S.sync_ext) api('tap');
     else if (k === 'b' && !e.repeat) api('blackout', { on: !S.blackout });
     else if (k === 'escape') applyGroup('none');
     else if (holdKeys[k] && !e.repeat) api('hold', { kind: holdKeys[k], on: true });

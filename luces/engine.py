@@ -65,6 +65,9 @@ class Engine:
         self.holds = set()          # 'flash', 'strobe', 'humo'
         self.bpm = 120.0
         self.taps = []
+        self.sync_ext = False      # seguir el tempo de VirtualDJ (OS2L)
+        self.ext_bpm = None
+        self.ext_last = 0.0
         self.test = {}              # dirección DMX (1..512) -> valor 0..255
         self.cue_index = -1
         self.cue_next_at = None
@@ -797,8 +800,36 @@ class Engine:
                 st["hz"] = round(clamp(float(kw["hz"]), 0.5, STROBE2_MAX_HZ), 1)
             self.changed()
 
+    # ------------------------------------------- tempo desde VirtualDJ ---
+    def external_beat(self, bpm=None):
+        """Llega un pulso de la música (OS2L). Solo manda si el seguimiento está prendido."""
+        with self.lock:
+            self.ext_last = time.monotonic()
+            try:
+                b = float(bpm) if bpm is not None else None
+            except (TypeError, ValueError):
+                b = None
+            if b is not None and 30 <= b <= 300:
+                self.ext_bpm = b
+            if self.sync_ext:
+                self.beat_phase = 0.0  # el compás queda pegado al pulso real
+                if b is not None and 30 <= b <= 300:
+                    nb = round(b, 1)
+                    if abs(nb - self.bpm) >= 0.1:
+                        self.bpm = nb
+                        self.changed()
+
+    def set_sync(self, on):
+        with self.lock:
+            self.sync_ext = bool(on)
+            if self.sync_ext and self.ext_bpm:
+                self.bpm = round(self.ext_bpm, 1)
+            self.changed()
+
     def tap(self):
         with self.lock:
+            if self.sync_ext:
+                return  # el tempo lo maneja VirtualDJ
             now = time.monotonic()
             if self.taps and now - self.taps[-1] > 2.0:
                 self.taps = []
@@ -1083,7 +1114,7 @@ class Engine:
                 "look": self._materialize(now) if self.fade else self.look,
                 "fx": self.fx,
                 "master": self.master, "blackout": self.blackout, "holds": sorted(self.holds),
-                "bpm": self.bpm, "cue_index": self.cue_index,
+                "bpm": self.bpm, "cue_index": self.cue_index, "sync_ext": self.sync_ext,
                 "cue_auto": self.cue_next_at is not None,
                 "test": {str(k): v for k, v in self.test.items()},
                 "conflicts": self.conflicts(),

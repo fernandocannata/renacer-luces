@@ -10,6 +10,7 @@ from urllib.parse import urlparse
 
 from . import efectos, frontal
 from .dmx_output import create_output
+from .os2l import OS2LServer
 from .engine import FX_TYPES, Engine
 from .fixtures import CHANNEL_ATTRS, PALETTE, Library
 from .storage import Storage, base_dir, default_show, safe_name
@@ -56,6 +57,10 @@ class App:
         # el primer cuadro ya sale con el estado real (no todo en cero: evita un salto al abrir)
         self.output.set_frame(self.engine.tick())
         self.output.start()
+        # tempo desde VirtualDJ (OS2L): escucha siempre; aplica solo si está prendido
+        self.engine.sync_ext = bool(self.storage.settings.get("os2l_sync"))
+        self.os2l = OS2LServer(self._on_os2l, self.storage.settings.get("os2l_puerto", 9996))
+        self.os2l.start()
         self.saved_version = self.engine.version
         self.last_save = time.monotonic()
         self.stop_event = threading.Event()
@@ -89,6 +94,16 @@ class App:
             else:
                 nxt = time.perf_counter()
 
+    def _on_os2l(self, msg):
+        if msg.get("evt") == "beat":
+            self.engine.external_beat(msg.get("bpm"))
+
+    def sync_status(self):
+        e, st = self.engine, self.os2l.status()
+        age = time.monotonic() - e.ext_last if e.ext_last else None
+        return {"on": e.sync_ext, "connected": st["clients"] > 0, "listening": st["listening"],
+                "beats": age is not None and age < 2.5, "bpm": e.ext_bpm, "port": st["port"], "error": st["error"]}
+
     def save_now(self):
         self.saved_version = self.engine.version
         self.last_save = time.monotonic()
@@ -104,6 +119,7 @@ class App:
         time.sleep(0.15)
         self.save_now()
         self.stop_event.set()
+        self.os2l.stop()
         self.output.stop()
         if self.server:
             threading.Thread(target=self.server.shutdown, daemon=True).start()
@@ -124,6 +140,7 @@ class App:
             "lan": "http://%s:%s" % (lan_ip(), self.storage.settings.get("puerto", 8730)),
             "data_dir": self.storage.dir,
             "output": self.output.status(),
+            "sync": self.sync_status(),
             "state": self.engine.snapshot(),
         }
 
@@ -208,6 +225,10 @@ class App:
             e.set_hold(c["kind"], c["on"])
         elif cmd == "strobe2_set":
             e.set_strobe2(**{k: c[k] for k in ("sync", "div", "hz", "white") if k in c})
+        elif cmd == "sync_set":
+            e.set_sync(c.get("on"))
+            self.storage.settings["os2l_sync"] = e.sync_ext
+            self.storage.save_settings()
         elif cmd == "tap":
             e.tap()
         elif cmd == "bpm":
@@ -361,7 +382,8 @@ def make_handler(app):
                         snap["app_settings"] = app.storage.settings
                         self._event("sync", snap)
                     self._event("live", {"pv": eng.preview, "beat": round(eng.beat_phase, 3),
-                                         "cue": eng.cue_index, "out": app.output.status()})
+                                         "cue": eng.cue_index, "out": app.output.status(),
+                                         "sync": app.sync_status()})
                     time.sleep(1 / 15)
                 self._event("bye", {})
             except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError, OSError):

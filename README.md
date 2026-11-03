@@ -97,6 +97,13 @@ segundo), y si los destellos son en blanco.
 cabezal: *Prender el equipo para ver*, mové la rueda hasta ver un color entero
 y tocá su nombre. Repetí con todos y tocá *Guardar perfil*.
 
+**Tempo desde VirtualDJ (botón VDJ, al lado de Tap).** Prendido, el tempo
+de los efectos y del Strobo 2 sigue a la música que suena en VirtualDJ y se
+alinea con cada pulso. Apagado, el tempo lo marcás con Tap. Configuración en
+VirtualDJ (una sola vez): *Settings → Options*, buscá **os2l**, dejá `os2l` en
+`auto`, poné `os2lDirectIp` en `127.0.0.1:9996` y reiniciá VirtualDJ. El punto
+del botón se pone verde cuando llegan los pulsos.
+
 **Clear.** Vuelve todo a cero, como recién abierto (luces apagadas, sin
 efectos, master al 100%, sin blackout). Durante unos segundos aparece
 *Deshacer* por si lo tocaste sin querer. No borra escenas ni el frente.

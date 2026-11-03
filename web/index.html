@@ -12,20 +12,21 @@
 <body>
 
 <header id="top">
-  <div id="brand"><img src="icono.png" alt="">Renacer LightShow</div>
+  <div id="brand"><img src="icono.png" alt=""><span class="bname">Renacer LightShow</span></div>
   <button id="out" title="Estado de la interfaz DMX"><span class="dot"></span><span id="outLbl">Conectando…</span></button>
 
   <div class="topgroup" title="Tempo para los efectos">
-    <span id="beat"></span><span id="bpm">120</span><span class="lbl">BPM</span>
+    <span id="beat"></span><span id="bpm">120</span><span class="lbl bpmlbl">BPM</span>
     <button id="btnTap" title="Tocá al ritmo de la música (tecla T)">Tap</button>
+    <button id="btnSync" class="syncbtn" aria-pressed="false" title="Seguir el tempo de VirtualDJ"><span class="sdot"></span>VDJ</button>
   </div>
   <div class="topgroup" title="Tiempo de fundido al cambiar de escena">
-    <span class="lbl">Fundido</span>
+    <span class="lbl" data-short="Fund.">Fundido</span>
     <input type="range" id="fade" class="mini-range" min="0" max="10" step="0.1">
     <span id="fadeVal">1.0 s</span>
   </div>
   <div class="topgroup" title="Intensidad general de todas las luces">
-    <span class="lbl">Master</span>
+    <span class="lbl" data-short="Mast.">Master</span>
     <input type="range" id="master" class="mini-range" min="0" max="1" step="0.01">
     <span id="masterVal">100%</span>
   </div>
@@ -299,6 +300,15 @@
           </div>
           <p class="hint">Si algún equipo se resetea o tiembla con el ritmo normal, probá el seguro.</p>
           <p class="hint">Cerrá QLC+, FreeStyler o MagicQ antes: la interfaz solo puede usarla un programa a la vez.</p>
+        </div>
+        <div class="box">
+          <h2>Tempo desde VirtualDJ</h2>
+          <p class="hint" id="syncDetail"></p>
+          <ol class="steps">
+            <li>En VirtualDJ: <b>Settings → Options</b> y buscá <b>os2l</b>.</li>
+            <li>Dejá <b>os2l</b> en <b>auto</b> y poné <b>os2lDirectIp</b> en <b>127.0.0.1:<span id="syncPort">9996</span></b>.</li>
+            <li>Reiniciá VirtualDJ. Con el botón <b>VDJ</b> (al lado de Tap) prendido, el tempo sigue a la música.</li>
+          </ol>
         </div>
         <div class="box">
           <h2>Control desde el celular</h2>

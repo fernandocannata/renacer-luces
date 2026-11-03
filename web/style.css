@@ -573,3 +573,28 @@ a { color: var(--amber); }
 .wchip button { padding: 1px 6px; border-radius: 99px; }
 .wtext { margin-top: 10px; }
 .wtext summary { cursor: pointer; }
+
+/* ---------------------------------------------------------- VDJ (tempo desde VirtualDJ) */
+.syncbtn { display: inline-flex; align-items: center; gap: 6px; background: transparent; border-color: var(--line); color: var(--muted); }
+.syncbtn .sdot { width: 8px; height: 8px; border-radius: 50%; background: var(--dim); }
+.syncbtn.wait { color: var(--warn); border-color: rgba(240, 196, 106, .45); }
+.syncbtn.wait .sdot { background: var(--warn); animation: blink 1s steps(2) infinite; }
+.syncbtn.live { color: var(--ok); border-color: rgba(79, 209, 139, .55); background: rgba(79, 209, 139, .08); }
+.syncbtn.live .sdot { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
+@keyframes blink { 50% { opacity: .25; } }
+@media (prefers-reduced-motion: reduce) { .syncbtn.wait .sdot { animation: none; } }
+@media (max-width: 1560px) {
+  #top .topgroup .lbl[data-short] { font-size: 0; }
+  #top .topgroup .lbl[data-short]::after { content: attr(data-short); font-size: 13px; }
+  #bpm { font-size: 20px; min-width: 40px; }
+  #holds button { padding: 12px 11px; }
+  #holds .s2cfg { padding: 12px 7px; }
+  .syncbtn { padding: 8px 9px; }
+}
+@media (max-width: 1560px) {
+  .mini-range { width: 72px; }
+  #top .bpmlbl { display: none; }
+}
+@media (max-width: 1340px) {
+  #brand .bname { display: none; }
+}
