@@ -100,9 +100,13 @@ y tocá su nombre. Repetí con todos y tocá *Guardar perfil*.
 **Tempo desde VirtualDJ (botón VDJ, al lado de Tap).** Prendido, el tempo
 de los efectos y del Strobo 2 sigue a la música que suena en VirtualDJ y se
 alinea con cada pulso. Apagado, el tempo lo marcás con Tap. Configuración en
-VirtualDJ (una sola vez): *Settings → Options*, buscá **os2l**, dejá `os2l` en
-`auto`, poné `os2lDirectIp` en `127.0.0.1:9996` y reiniciá VirtualDJ. El punto
-del botón se pone verde cuando llegan los pulsos.
+VirtualDJ (una sola vez): *Settings → Options*, buscá **os2l**, poné `os2l` en
+`yes` y `os2lDirectIp` en `127.0.0.1:9996`. Después, en *Settings → Controllers
+→ Keyboard*, agregá una tecla (por ejemplo F12) con la acción
+`os2l_button "renacer" on`. VirtualDJ se conecta recién cuando recibe un
+comando OS2L: con Renacer LightShow abierto, tocá esa tecla una vez y desde
+ahí manda el pulso solo. El punto del botón se pone verde cuando llegan los
+pulsos.
 
 **Clear.** Vuelve todo a cero, como recién abierto (luces apagadas, sin
 efectos, master al 100%, sin blackout). Durante unos segundos aparece

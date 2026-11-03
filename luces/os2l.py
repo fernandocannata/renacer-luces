@@ -68,6 +68,8 @@ class OS2LServer:
         self.listening = False
         self.error = ""
         self.last_msg = 0.0
+        self.connections = 0     # cuántas veces se conectó VirtualDJ desde que abrió el programa
+        self.messages = 0
         self._stop = threading.Event()
         self._sock = None
 
@@ -84,6 +86,7 @@ class OS2LServer:
 
     def status(self):
         return {"listening": self.listening, "clients": self.clients, "port": self.port,
+                "connections": self.connections, "messages": self.messages,
                 "error": self.error, "age": round(time.monotonic() - self.last_msg, 1) if self.last_msg else None}
 
     def _serve(self):
@@ -116,6 +119,7 @@ class OS2LServer:
 
     def _client(self, conn):
         self.clients += 1
+        self.connections += 1
         stream = JsonStream()
         conn.settimeout(1.0)
         try:
@@ -128,6 +132,7 @@ class OS2LServer:
                     break
                 for msg in stream.feed(data.decode("utf-8", "replace")):
                     self.last_msg = time.monotonic()
+                    self.messages += 1
                     try:
                         self.on_message(msg)
                     except Exception as e:  # un mensaje raro no corta la conexión

@@ -21,7 +21,7 @@ TYPES = {
     "chispas": ("dim", "Chispas", "dim"),
     "relampago": ("dim", "Relámpago", "dim"),
     "par_impar": ("dim", "Pares e impares", "dim"),
-    "arcoiris": ("color", "Arcoíris", "rgb"),
+    "arcoiris": ("color", "Arcoíris", "color"),  # en cabezales recorre la rueda de color
     "colores": ("color", "Alternar colores", "color"),
     "alternar": ("color", "Pares e impares de color", "color"),
     "mitades": ("color", "Mitades", "color"),

@@ -184,12 +184,13 @@ function renderSync(sy) {
   const msg = !sy.on ? 'Apagado: el tempo lo marcás vos con Tap.'
     : sy.beats ? `Siguiendo a VirtualDJ${sy.bpm ? ' (' + sy.bpm.toFixed(1) + ' BPM)' : ''}.`
     : sy.connected ? 'VirtualDJ conectado: esperando que suene un tema.'
-    : sy.listening ? 'Esperando a VirtualDJ. Revisá que esté configurado (ver Show y ajustes).'
+    : sy.listening ? 'Esperando a VirtualDJ: tocá en VirtualDJ la tecla con os2l_button (ver Show y ajustes).'
     : (sy.error || 'No se pudo abrir la conexión.');
   b.title = 'Seguir el tempo de VirtualDJ. ' + msg;
   $('#btnTap').disabled = !!sy.on;
   $('#btnTap').title = sy.on ? 'Con VDJ prendido, el tempo lo marca VirtualDJ' : 'Tocá al ritmo de la música (tecla T)';
-  $('#syncDetail').textContent = (sy.connected ? 'Estado: VirtualDJ conectado. ' : 'Estado: VirtualDJ no conectado. ') + msg;
+  $('#syncDetail').textContent = (sy.connected ? 'Estado: VirtualDJ conectado. ' : 'Estado: VirtualDJ no conectado. ') + msg
+    + ` (conexiones: ${sy.connections || 0}, mensajes: ${sy.messages || 0})`;
   $('#syncPort').textContent = sy.port;
 }
 

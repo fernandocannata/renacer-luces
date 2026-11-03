@@ -59,10 +59,18 @@ def test_relampago_casi_siempre_oscuro():
     assert any(f[52] == 255 for f in frames if f[48] > 0)
 
 
+def test_arcoiris_en_cabezales_recorre_la_rueda():
+    e = make()
+    e.set_attrs(CAB, {"dim": 1})
+    e.add_fx(CAB, "arcoiris", {"beats": 4, "spread": 0})
+    seen = {f[7] for f in run(e, 4.0)}  # canal de rueda de color del cabezal 1
+    assert len(seen) >= 4, seen        # pasa por varios colores de la rueda
+
+
 def test_efectos_rgb_no_van_en_cabezales():
     e = make()
     with pytest.raises(ValueError):
-        e.add_fx(CAB, "arcoiris")
+        e.add_fx(CAB, "fuego")
     e.add_fx(CAB + PAR, "fuego")
     assert e.fx[0]["ids"] == PAR  # con todo elegido, solo se aplica a los que pueden
     e.add_fx(CAB + PAR, "mitades")  # alternar de a pasos sí va en rueda de color

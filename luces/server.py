@@ -102,7 +102,8 @@ class App:
         e, st = self.engine, self.os2l.status()
         age = time.monotonic() - e.ext_last if e.ext_last else None
         return {"on": e.sync_ext, "connected": st["clients"] > 0, "listening": st["listening"],
-                "beats": age is not None and age < 2.5, "bpm": e.ext_bpm, "port": st["port"], "error": st["error"]}
+                "beats": age is not None and age < 2.5, "bpm": e.ext_bpm, "port": st["port"], "error": st["error"],
+                "connections": st["connections"], "messages": st["messages"]}
 
     def save_now(self):
         self.saved_version = self.engine.version

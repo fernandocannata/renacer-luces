@@ -598,3 +598,4 @@ a { color: var(--amber); }
 @media (max-width: 1340px) {
   #brand .bname { display: none; }
 }
+code { font: 600 12.5px var(--num); background: var(--ctrl); padding: 1px 6px; border-radius: 4px; color: var(--text); -webkit-user-select: all; user-select: all; }
