@@ -458,3 +458,74 @@ input[type=range]:active::-webkit-slider-thumb { background: var(--amber); }
   .stage .haze { transition: none; }
   .tile.strobing .beam, .tile.strobing .lens { animation: none; }
 }
+
+/* ---------------------------------------------------------- Clear */
+#btnClear { background: transparent; border-color: rgba(217, 165, 91, .45); color: var(--amber); }
+#btnClear:hover { background: rgba(217, 165, 91, .12); }
+#toast { display: flex; align-items: center; gap: 12px; }
+#toast button { background: var(--base); color: var(--text); }
+
+/* ---------------------------------------------------------- Movimientos */
+#audView {
+  position: relative; width: 100%; aspect-ratio: 2.4; margin: 6px 0 4px; border-radius: 10px; overflow: hidden;
+  background:
+    linear-gradient(180deg, transparent 50%, rgba(217, 165, 91, .05) 75%, rgba(217, 165, 91, .1)),
+    radial-gradient(60% 90% at 50% 50%, #1a1520, #0d0a10);
+  border: 1px solid var(--line);
+}
+#audView .horizon { position: absolute; left: 4%; right: 4%; top: 50%; border-top: 1px dashed rgba(242, 235, 223, .18); }
+#audView .lbl { position: absolute; font-size: 11px; color: var(--dim); }
+#audView .l-front { left: 6px; top: calc(50% - 16px); }
+#audView .l-floor { left: 50%; bottom: 4px; transform: translateX(-50%); }
+#audView .adot {
+  --c: #fff; --d: 0;
+  position: absolute; width: 22px; height: 22px; margin: -11px 0 0 -11px; border-radius: 50%;
+  display: grid; place-items: center; font: 700 11px var(--num); color: #000;
+  background: color-mix(in srgb, var(--c) calc(25% + var(--d) * 75%), #2a2331);
+  box-shadow: 0 0 calc(4px + var(--d) * 18px) calc(var(--d) * 4px) var(--c);
+  border: 1px solid rgba(255, 255, 255, .35);
+}
+.layouts, .movgrid { display: grid; gap: 8px; }
+.layouts { grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); }
+.movgrid { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); }
+.layouts button, .movgrid button {
+  display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 6px 9px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, .03), transparent), var(--panel);
+  border: 1px solid rgba(255, 255, 255, .05); font-size: 13px; text-align: center; line-height: 1.15;
+}
+.layouts button:hover, .movgrid button:hover { border-color: rgba(217, 165, 91, .5); background: var(--ctrl); }
+.layouts svg { width: 100%; height: 40px; }
+.movgrid svg { width: 100%; height: 58px; }
+.layouts svg .hz, .movgrid svg .hz { stroke: rgba(242, 235, 223, .14); stroke-width: 1; stroke-dasharray: 3 3; }
+.movgrid polyline { fill: none; stroke-width: 2.4; stroke-linejoin: round; stroke-linecap: round; opacity: .85; mix-blend-mode: screen; }
+.layouts .ray { stroke-width: 3; stroke-linecap: round; opacity: .8; }
+#movList { margin-top: 6px; }
+
+/* calibración del frente */
+#frontBox summary { display: flex; align-items: baseline; gap: 10px; cursor: pointer; list-style: none; }
+#frontBox summary::-webkit-details-marker { display: none; }
+#frontBox summary::before { content: "▸"; display: inline-block; color: var(--amber); transition: transform .15s; }
+#frontBox[open] summary::before { transform: rotate(90deg); }
+.steps { margin: 12px 0; padding-left: 20px; }
+.steps li { margin-bottom: 10px; padding-left: 4px; }
+.steps li::marker { color: var(--amber); font: 600 14px var(--num); }
+.nudge { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; }
+.steppick { display: inline-flex; gap: 2px; margin-left: 8px; }
+.fchip { padding: 4px 9px; border-radius: 99px; border: 1px solid var(--line); font-size: 12px; color: var(--muted); }
+.fchip.ok { border-color: rgba(79, 209, 139, .5); color: var(--ok); }
+.checks { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 12px 0 6px; }
+.checks label { display: flex; gap: 6px; align-items: center; }
+a { color: var(--amber); }
+@media (prefers-reduced-motion: reduce) { #frontBox summary::before { transition: none; } }
+#holds { gap: 6px; }
+#holds button { min-width: 0; padding: 12px 14px; }
+.mini-range { width: 110px; }
+.movgrid polyline { stroke-width: 2; opacity: .55; }
+.movgrid circle { stroke: #0f0c13; stroke-width: 1.5; }
+@media (max-width: 1560px) {
+  #top { gap: 10px; }
+  #outLbl { display: none; }
+  #out { padding: 7px 9px; }
+  .mini-range { width: 84px; }
+  #brand { font-size: 19px; }
+}

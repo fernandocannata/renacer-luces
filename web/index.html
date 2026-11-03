@@ -34,6 +34,7 @@
     <button id="btnFlash" title="Mantener: todo blanco a full (tecla F)">Flash</button>
     <button id="btnStrobe" title="Mantener: todo en strobo (tecla S)">Strobo</button>
     <button id="btnHumo" title="Mantener: dispara la máquina de humo (tecla H)">Humo</button>
+    <button id="btnClear" title="Vuelve todo a cero, como recién abierto. Se puede deshacer.">Clear</button>
     <button id="btnBlackout" title="Apaga todo hasta que lo vuelvas a tocar (tecla B)">Blackout</button>
   </div>
 </header>
@@ -58,6 +59,7 @@
       <div id="progTabs">
         <button data-p="color" class="on">Color e intensidad</button>
         <button data-p="pos">Posición</button>
+        <button data-p="mov">Movimientos</button>
         <button data-p="haz">Haz</button>
         <button data-p="fx">Efectos</button>
       </div>
@@ -89,9 +91,52 @@
         <div class="slider" style="margin-top:12px"><label for="fan">Abanico</label><input type="range" id="fan" min="-1" max="1" step="0.01" value="0"><output id="fanVal">0</output></div>
         <div class="slider"><label for="pts">Velocidad mov.</label><input type="range" id="pts" min="0" max="1" step="0.01"><output id="ptsVal"></output></div>
         <div class="row" style="margin:6px 0 4px"><button class="ghost small" id="btnCenter">Centrar</button></div>
+        <h3>Ajuste fino</h3>
+        <div class="nudge" data-nudgebox></div>
         <h3>Posiciones guardadas</h3>
         <div class="row" id="positions"></div>
         <div class="row" style="margin-top:10px"><button id="btnSavePos" class="ghost">Guardar posición actual</button></div>
+      </div>
+
+      <div class="ppanel" data-p="mov">
+        <div class="box warnbox" id="frontWarn">Antes de usar los movimientos, ajustá el frente al público (al final de esta pestaña). Se hace una sola vez y queda guardado.</div>
+        <div class="colhead"><h3 style="margin:0">Vista desde el público</h3><span class="hint" id="movTarget"></span></div>
+        <div id="audView" aria-label="Hacia dónde apunta cada cabezal, mirando desde el público">
+          <span class="horizon"></span><span class="lbl l-front">altura del frente</span><span class="lbl l-floor">público</span>
+        </div>
+        <h3>Posiciones</h3>
+        <div class="layouts" id="layouts"></div>
+        <h3>Movimientos</h3>
+        <div class="movgrid" id="movPresets"></div>
+        <div id="movList"></div>
+
+        <details class="box" id="frontBox">
+          <summary><h2>Ajustar frente al público</h2><span class="hint" id="frontSummary"></span></summary>
+          <ol class="steps">
+            <li>Tocá <b>un</b> cabezal en el escenario.</li>
+            <li>Apuntalo al centro del público, a la altura de la cabeza de la gente. Usá el recuadro de <a href="#" data-goto="pos">Posición</a> o estas flechas:
+              <div class="nudge" data-nudgebox></div></li>
+            <li><button id="btnFrontSave">Este es su frente</button> y repetí con el siguiente cabezal.</li>
+          </ol>
+          <div class="row" id="frontStatus"></div>
+          <h3>Verificar direcciones</h3>
+          <p class="hint">Mirando desde el público, cada botón tiene que mandar los cabezales hacia ese lado. Si alguno va al revés, tildá la opción de abajo.</p>
+          <div class="row">
+            <button class="ghost" data-ftest="-0.8,0">◀ Izquierda</button>
+            <button class="ghost" data-ftest="0.8,0">Derecha ▶</button>
+            <button class="ghost" data-ftest="0,0.8">▲ Arriba</button>
+            <button class="ghost" data-ftest="0,-0.8">▼ Abajo</button>
+            <button class="ghost" data-ftest="0,0">Al frente</button>
+          </div>
+          <div class="checks">
+            <label><input type="checkbox" id="flipX"> Invertir izquierda y derecha</label>
+            <label><input type="checkbox" id="flipY"> Invertir arriba y abajo</label>
+            <label><input type="checkbox" id="revOrder"> El cabezal 1 está a la derecha</label>
+          </div>
+          <div class="slider"><label for="spanX">Apertura lateral</label><input type="range" id="spanX" min="15" max="120" step="1"><output id="spanXVal"></output></div>
+          <div class="slider"><label for="spanY">Recorrido vertical</label><input type="range" id="spanY" min="10" max="80" step="1"><output id="spanYVal"></output></div>
+          <p class="hint">Son los grados máximos hacia cada lado del frente. Colgados, los cabezales casi no suben más allá de la horizontal: ahí el programa achata el movimiento para que entre.</p>
+        </details>
       </div>
 
       <div class="ppanel" data-p="haz">
@@ -121,13 +166,7 @@
           <button data-fx="arcoiris">Arcoíris<small>Recorre los colores</small></button>
           <button data-fx="colores">Alternar colores<small>Entre los que elijas</small></button>
         </div>
-        <h3>Movimiento</h3>
-        <div class="fxgrid">
-          <button data-fx="circulo">Círculo</button>
-          <button data-fx="ocho">Ocho</button>
-          <button data-fx="paneo">Paneo<small>Lado a lado</small></button>
-          <button data-fx="tilt">Tilt<small>Arriba y abajo</small></button>
-        </div>
+        <p class="hint" style="margin-top:14px">Los movimientos de los cabezales están en la pestaña <a href="#" data-goto="mov">Movimientos</a>.</p>
         <div class="colhead" style="margin-top:18px"><h2>Efectos activos</h2><button class="ghost small" id="btnFxClearSel">Quitar efectos de la selección</button></div>
         <div id="fxList"></div>
       </div>

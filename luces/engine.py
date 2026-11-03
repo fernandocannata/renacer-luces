@@ -7,6 +7,7 @@ import threading
 import time
 import uuid
 
+from . import frontal
 from .fixtures import (CONTINUOUS, PALETTE, apply_color, caps, default_look,
                        hex_to_rgb, nearest_slot, rgb_to_hex, rgbw_to_rgb)
 
@@ -23,6 +24,12 @@ FX_TYPES = {
     "paneo": ("pos", "Paneo"),
     "tilt": ("pos", "Tilt"),
 }
+# movimientos frontales (cabezales mirando al público)
+for _k, _n in frontal.SHAPES.items():
+    FX_TYPES["f_" + _k] = ("pos", _n)
+
+RIG_DEFAULT = {"front": {}, "span_x": 60.0, "span_y": 35.0, "flip_x": False, "flip_y": False,
+               "reverse_order": False, "calibrated": False}
 
 
 def new_id(prefix):
@@ -62,6 +69,7 @@ class Engine:
         self.beat_phase = 0.0
         self.preview = {}
         self.frame = bytes(512)
+        self._undo = None
         self.load_show(show)
 
     # ------------------------------------------------------------ show ---
@@ -75,6 +83,8 @@ class Engine:
             st.setdefault("fade", 1.0)
             st.setdefault("cue_loop", False)
             self.show = show
+            self.rig()
+            self._undo = None
             saved = show.get("state", {})
             self.look = {}
             for fx in show["fixtures"]:
@@ -256,6 +266,157 @@ class Engine:
                 self.fx = []
             self.changed()
 
+    # ---------------------------------------------- frente al público ---
+    def rig(self):
+        r = self.show.setdefault("rig", {})
+        for k, v in RIG_DEFAULT.items():
+            r.setdefault(k, copy.deepcopy(v))
+        return r
+
+    def movers(self):
+        """Cabezales en orden de izquierda a derecha, vistos desde el público."""
+        m = [f["id"] for f in self.show["fixtures"] if "pan" in self.look.get(f["id"], {})]
+        return m[::-1] if self.rig().get("reverse_order") else m
+
+    def mover_u(self, fid):
+        m = self.movers()
+        return frontal.head_u(m.index(fid), len(m)) if fid in m else 0.0
+
+    def _degrees(self, fid):
+        prof = self.profile_of(fid) or {}
+        return float(prof.get("pan_deg", 540)), float(prof.get("tilt_deg", 180))
+
+    @staticmethod
+    def _rooms(front, deg, flip):
+        """Grados disponibles hacia + y hacia − (en el sentido del público)."""
+        hi, lo = (1.0 - front) * deg, front * deg
+        return (lo, hi) if flip else (hi, lo)
+
+    def _axis(self, front, value, span, deg, flip):
+        pos_room, neg_room = self._rooms(front, deg, flip)
+        use = min(span, pos_room if value >= 0 else neg_room)
+        return clamp(front + (-1.0 if flip else 1.0) * value * use / deg)
+
+    def _axis_inv(self, front, pos, span, deg, flip):
+        d = (pos - front) * deg * (-1.0 if flip else 1.0)
+        pos_room, neg_room = self._rooms(front, deg, flip)
+        use = min(span, pos_room if d >= 0 else neg_room)
+        return d / use if use > 0.5 else 0.0
+
+    def xy_to_pt(self, fid, x, y):
+        """Punto del público (x, y) -> pan/tilt. Si un eje no tiene recorrido
+        suficiente (cabezales colgados no suben mucho más que la horizontal),
+        el movimiento se achata para que entre, en lugar de cortarse."""
+        r = self.rig()
+        fp, ft = r["front"].get(fid, [0.5, 0.5])
+        pdeg, tdeg = self._degrees(fid)
+        return (self._axis(fp, x, float(r["span_x"]), pdeg, r.get("flip_x")),
+                self._axis(ft, y, float(r["span_y"]), tdeg, r.get("flip_y")))
+
+    def pt_to_xy(self, fid, pan, tilt):
+        r = self.rig()
+        fp, ft = r["front"].get(fid, [0.5, 0.5])
+        pdeg, tdeg = self._degrees(fid)
+        return (self._axis_inv(fp, pan, float(r["span_x"]), pdeg, r.get("flip_x")),
+                self._axis_inv(ft, tilt, float(r["span_y"]), tdeg, r.get("flip_y")))
+
+    def nudge(self, ids, dpan_deg=0.0, dtilt_deg=0.0):
+        """Ajuste fino en grados (para apuntar con precisión)."""
+        with self.lock:
+            for fid in ids:
+                v = self.look.get(fid, {})
+                if "pan" not in v:
+                    continue
+                pdeg, tdeg = self._degrees(fid)
+                self._set(fid, "pan", clamp(v["pan"] + float(dpan_deg) / pdeg))
+                self._set(fid, "tilt", clamp(v.get("tilt", 0.5) + float(dtilt_deg) / tdeg))
+            self._drop_fx(ids, "pos")
+            self.changed()
+
+    def front_layout(self, ids, name, fade=0.8):
+        """Posición fija pensada desde el público (abanico, cruzados, en V…)."""
+        fn = frontal.LAYOUT_FN.get(name)
+        if not fn:
+            raise ValueError("Posición desconocida")
+        with self.lock:
+            targets = [i for i in self.movers() if i in set(ids)] or []
+            if not targets:
+                raise ValueError("Elegí cabezales")
+            self._start_fade(fade)
+            for fid in targets:
+                pan, tilt = self.xy_to_pt(fid, *fn(self.mover_u(fid)))
+                self.look[fid]["pan"], self.look[fid]["tilt"] = pan, tilt
+            self._drop_fx(targets, "pos")
+            self.changed()
+
+    def front_test(self, ids, x, y):
+        """Mueve los cabezales a un punto del público (para verificar direcciones)."""
+        with self.lock:
+            targets = [i for i in self.movers() if i in set(ids)]
+            for fid in targets:
+                pan, tilt = self.xy_to_pt(fid, float(x), float(y))
+                self._set(fid, "pan", pan)
+                self._set(fid, "tilt", tilt)
+            self._drop_fx(targets, "pos")
+            self.changed()
+
+    def save_front(self, ids):
+        """Toma la posición actual de cada cabezal como su 'frente al público'."""
+        with self.lock:
+            r = self.rig()
+            targets = [i for i in self.movers() if i in set(ids)]
+            if not targets:
+                raise ValueError("Elegí los cabezales ya apuntados al frente")
+            for fid in targets:
+                r["front"][fid] = [round(self.look[fid]["pan"], 5), round(self.look[fid]["tilt"], 5)]
+            r["calibrated"] = True
+            self.changed()
+            return len(targets)
+
+    def set_rig(self, **kw):
+        with self.lock:
+            r = self.rig()
+            for k in ("span_x", "span_y"):
+                if k in kw:
+                    r[k] = max(5.0, min(270.0 if k == "span_x" else 90.0, float(kw[k])))
+            for k in ("flip_x", "flip_y", "reverse_order"):
+                if k in kw:
+                    r[k] = bool(kw[k])
+            self.changed()
+
+    # ------------------------------------------------------------ clear ---
+    def clear_all(self):
+        """Vuelve todo a cero, como recién abierto (guarda para poder deshacer)."""
+        with self.lock:
+            self._undo = {"look": self._materialize(time.monotonic()), "fx": copy.deepcopy(self.fx),
+                          "master": self.master, "blackout": self.blackout, "cue_index": self.cue_index}
+            self.fade = None
+            for f in self.show["fixtures"]:
+                prof = self.lib.get(f["profile"])
+                if prof:
+                    self.look[f["id"]] = default_look(prof)
+            self.fx = []
+            self.master = 1.0
+            self.blackout = False
+            self.holds = set()
+            self.test = {}
+            self.cue_index = -1
+            self.cue_next_at = None
+            self.changed()
+
+    def undo_clear(self):
+        with self.lock:
+            u = self._undo
+            if not u:
+                raise ValueError("No hay nada para deshacer")
+            self._undo = None
+            for fid, v in u["look"].items():
+                if fid in self.look:
+                    self.look[fid] = v
+            self.fx = u["fx"]
+            self.master, self.blackout, self.cue_index = u["master"], u["blackout"], u["cue_index"]
+            self.changed()
+
     def _ordered(self, ids):
         order = [f["id"] for f in self.show["fixtures"]]
         s = set(ids)
@@ -302,9 +463,12 @@ class Engine:
                 fx.update(beats=2, spread=0.0)
             if ftype in ("circulo", "ocho", "paneo", "tilt"):
                 fx.update(beats=8, spread=0.25, size=0.5)
+            if ftype.startswith("f_"):
+                fx.update(frontal.DEFAULTS)
+                fx["name"] = str((params or {}).get("name") or FX_TYPES[ftype][1])[:40]
             fx.update({k: v for k, v in (params or {}).items() if k in fx and k not in ("id", "ids", "type")})
             self.fx.append(fx)
-            if fam == "dim":  # un efecto de intensidad sobre equipos apagados no se vería
+            if fam == "dim" or ftype.startswith("f_"):  # sobre equipos apagados no se vería
                 for fid in ids:
                     if self.look[fid].get("dim", 0) == 0:
                         self._set(fid, "dim", 1.0)
@@ -316,9 +480,9 @@ class Engine:
             for fx in self.fx:
                 if fx["id"] == fx_id:
                     for k, v in params.items():
-                        if k in ("sync", "reverse"):
+                        if k in ("sync", "reverse", "mirror"):
                             fx[k] = bool(v)
-                        elif k in ("beats", "hz", "size", "spread"):
+                        elif k in ("beats", "hz", "size", "spread", "altura", "apertura", "escalon"):
                             fx[k] = float(v)
                         elif k == "colors" and isinstance(v, list) and v:
                             fx[k] = [str(c) for c in v][:6]
@@ -352,6 +516,13 @@ class Engine:
             size = float(fx.get("size", 0.5))
             spread = float(fx.get("spread", 1.0))
             t = fx["type"]
+            if t.startswith("f_"):
+                fids = [i for i in self.movers() if i in set(ids)]
+                for k, fid in enumerate(fids):
+                    x, y = frontal.fx_xy(fx, self.mover_u(fid), k, len(fids), ph, fx["id"] + fid)
+                    pan, tilt = self.xy_to_pt(fid, x, y)
+                    cur[fid]["pan"], cur[fid]["tilt"] = pan, tilt
+                continue
             for k, fid in enumerate(ids):
                 v = cur[fid]
                 p = ph - spread * k / n
@@ -750,7 +921,10 @@ class Engine:
                 if "humo" in self.holds and "smoke" in v:
                     v["smoke"] = 1.0
                 self._write(frame, f, prof, c, v)
-                preview[f["id"]] = self._preview(prof, c, v)
+                pv = self._preview(prof, c, v)
+                if "pan" in v:
+                    pv["x"], pv["y"] = (round(q, 3) for q in self.pt_to_xy(f["id"], v["pan"], v.get("tilt", 0.5)))
+                preview[f["id"]] = pv
             for a, val in self.test.items():
                 frame[a - 1] = val
             self.frame = bytes(frame)
@@ -860,5 +1034,6 @@ class Engine:
                 "cue_auto": self.cue_next_at is not None,
                 "test": {str(k): v for k, v in self.test.items()},
                 "conflicts": self.conflicts(),
+                "rig": self.rig(), "movers": self.movers(), "can_undo_clear": self._undo is not None,
                 "version": self.version,
             })

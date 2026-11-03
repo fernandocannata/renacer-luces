@@ -59,6 +59,25 @@ Cabezales, Pares LED, 1-3-5, primera mitad…
   música) o a velocidad libre. Un efecto de color, uno de intensidad y uno de
   movimiento pueden convivir en los mismos equipos.
 
+**Movimientos (cabezales en trípode, mirando al público).** En la pestaña
+*Movimientos* está todo pensado de frente: posiciones fijas (al frente, al
+público, abanico, cruzados, a los costados, en V, escalera, foco al centro) y
+16 movimientos (círculos, ochos, barridos, espejo, ola, cascada, tijera,
+abanico, péndulo, cuadrado, búsqueda al azar…). Cada movimiento se ajusta con
+tamaño, altura, apertura, escalón, desfase, espejo y velocidad al tempo. Si no
+elegiste cabezales, se aplica a todos.
+
+**Ajustar el frente (una sola vez).** Al final de *Movimientos*: tocá un
+cabezal, apuntalo al centro del público a la altura de la cabeza de la gente
+y tocá *Este es su frente*. Repetí con cada uno. Después usá los botones
+*Izquierda / Derecha / Arriba / Abajo* para verificar, y si alguno va al revés
+tildá la opción que corresponda. Colgados, los cabezales casi no suben más
+allá de la horizontal: el programa achata el movimiento para que entre.
+
+**Clear.** Vuelve todo a cero, como recién abierto (luces apagadas, sin
+efectos, master al 100%, sin blackout). Durante unos segundos aparece
+*Deshacer* por si lo tocaste sin querer. No borra escenas ni el frente.
+
 **Escenas.** Cuando te gusta lo que hay, tocá *Guardar escena*. Después la
 recuperás con un toque, con fundido (barra *Fundido* de arriba). Las primeras
 nueve también responden a las teclas 1 a 9.

@@ -8,6 +8,7 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
 
+from . import frontal
 from .dmx_output import create_output
 from .engine import FX_TYPES, Engine
 from .fixtures import CHANNEL_ATTRS, PALETTE, Library
@@ -97,6 +98,7 @@ class App:
             "profiles": self.library.summary(),
             "palette": PALETTE,
             "fx_types": {k: {"family": v[0], "name": v[1]} for k, v in FX_TYPES.items()},
+            "frontal": frontal.catalog(),
             "channel_attrs": CHANNEL_ATTRS,
             "shows": self.storage.list_shows(),
             "settings": self.storage.settings,
@@ -121,6 +123,20 @@ class App:
             e.set_position(ids, c.get("pan"), c.get("tilt"))
         elif cmd == "set_positions":
             e.set_positions(c.get("values", {}))
+        elif cmd == "front_layout":
+            e.front_layout(ids, c["name"], float(c.get("fade", 0.8)))
+        elif cmd == "front_test":
+            e.front_test(ids, c.get("x", 0), c.get("y", 0))
+        elif cmd == "front_save":
+            return e.save_front(ids)
+        elif cmd == "rig_set":
+            e.set_rig(**{k: c[k] for k in ("span_x", "span_y", "flip_x", "flip_y", "reverse_order") if k in c})
+        elif cmd == "nudge":
+            e.nudge(ids, c.get("pan", 0), c.get("tilt", 0))
+        elif cmd == "clear_all":
+            e.clear_all()
+        elif cmd == "undo_clear":
+            e.undo_clear()
         elif cmd == "fan":
             e.fan(ids, float(c["amount"]))
         elif cmd == "locate":

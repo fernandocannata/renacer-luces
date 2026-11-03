@@ -42,10 +42,16 @@ async function pump(l) {
 }
 
 let toastT = null;
-function toast(msg, err = false) {
+function toast(msg, err = false, action = null) {
   const t = $('#toast');
   t.textContent = msg; t.className = 'show' + (err ? ' err' : '');
-  clearTimeout(toastT); toastT = setTimeout(() => (t.className = ''), err ? 4200 : 2200);
+  if (action) {
+    const b = document.createElement('button');
+    b.className = 'small'; b.textContent = action.label;
+    b.onclick = () => { t.className = ''; action.fn(); };
+    t.appendChild(b);
+  }
+  clearTimeout(toastT); toastT = setTimeout(() => (t.className = ''), action ? 8000 : err ? 4200 : 2200);
 }
 
 function changed(key, val) {
@@ -109,6 +115,7 @@ function onSync(s) {
   renderScenes();
   renderCues();
   renderFxList();
+  renderMov();
   renderPositions();
   renderPatch();
   renderProbar();
@@ -126,8 +133,13 @@ function onLive(d) {
     t.classList.toggle('strobing', p.s > 0.01 && p.d > 0.02);
     if (t.classList.contains('t-humo')) smoke = Math.max(smoke, p.d);
     if (p.p != null) {
-      t.style.setProperty('--rot', (-(p.p - 0.5) * 110).toFixed(1) + 'deg');
-      t.style.setProperty('--tl', (0.55 + 0.45 * (p.t ?? 0.5)).toFixed(3));
+      if (S && S.rig && S.rig.calibrated && p.x != null) {
+        t.style.setProperty('--rot', (-Math.max(-1.3, Math.min(1.3, p.x)) * 38).toFixed(1) + 'deg');
+        t.style.setProperty('--tl', (0.5 + 0.5 * Math.max(0, Math.min(1, (p.y + 1.3) / 2.6))).toFixed(3));
+      } else {
+        t.style.setProperty('--rot', (-(p.p - 0.5) * 110).toFixed(1) + 'deg');
+        t.style.setProperty('--tl', (0.55 + 0.45 * (p.t ?? 0.5)).toFixed(3));
+      }
     }
   }
   const st = $('.stage');
@@ -136,6 +148,7 @@ function onLive(d) {
   renderOut(d.out);
   if (S && d.cue !== S.cue_index) { S.cue_index = d.cue; sigs.cues = null; renderCues(); }
   drawXYPoints();
+  drawAudience();
 }
 
 /* ------------------------------------------------------------ barra superior */
@@ -244,6 +257,7 @@ function selectionChanged() {
   $('#fan').value = 0; $('#fanVal').textContent = '0';
   sigs.prog = null;
   renderProgrammer();
+  if (S) renderMov();
 }
 
 /* ------------------------------------------------------------ programador */
@@ -316,31 +330,108 @@ function drawXYPoints() {
 
 /* ------------------------------------------------------------ efectos */
 const FX_SIZE_LABEL = { pulso: 'Ancho', onda: 'Profundidad', azar: 'Cantidad', circulo: 'Tamaño', ocho: 'Tamaño', paneo: 'Tamaño', tilt: 'Tamaño' };
+const isMove = (f) => INIT.fx_types[f.type]?.family === 'pos';
+const signed = (v) => (v > 0.005 ? '+' : '') + Math.round(v * 100) + '%';
+function fxSlider(f, k, label, min, max, fmt = 'pct') {
+  const v = +f[k] || 0;
+  return `<div class="slider"><label>${label}</label><input type="range" min="${min}" max="${max}" step="0.01" value="${v}" data-fx="${f.id}" data-k="${k}" data-fmt="${fmt}"><output>${fmt === 'signed' ? signed(v) : pct(v)}</output></div>`;
+}
+function fxCard(f) {
+  const names = f.ids.map((i) => fx(i)?.name).filter(Boolean);
+  const typeName = f.name || INIT.fx_types[f.type]?.name || f.type;
+  const front = f.type.startsWith('f_');
+  const speed = f.sync
+    ? `<div class="slider"><label>Una vuelta cada</label><select data-fx="${f.id}" data-k="beats">${[1, 2, 4, 8, 16, 32].map((b) => `<option value="${b}" ${+f.beats === b ? 'selected' : ''}>${b} tiempo${b > 1 ? 's' : ''}</option>`).join('')}</select><output></output></div>`
+    : `<div class="slider"><label>Velocidad</label><input type="range" min="0.02" max="4" step="0.01" value="${f.hz}" data-fx="${f.id}" data-k="hz"><output>${(+f.hz).toFixed(2)}/s</output></div>`;
+  const size = front ? fxSlider(f, 'size', 'Tamaño', 0, 1)
+    : FX_SIZE_LABEL[f.type] ? fxSlider(f, 'size', FX_SIZE_LABEL[f.type], 0, 1) : '';
+  const frontExtra = front ? fxSlider(f, 'altura', 'Altura', -1, 1, 'signed')
+    + fxSlider(f, 'apertura', 'Apertura', -1, 1, 'signed') + fxSlider(f, 'escalon', 'Escalón', -1, 1, 'signed') : '';
+  const colors = f.type === 'colores' ? `<div class="row" style="margin:6px 0">
+      ${f.colors.map((c, i) => `<input type="color" value="${esc(c)}" data-fxc="${f.id}" data-i="${i}">`).join('')}
+      <button class="ghost small" data-fxcadd="${f.id}" ${f.colors.length >= 6 ? 'disabled' : ''}>+ color</button>
+      <button class="ghost small" data-fxcdel="${f.id}" ${f.colors.length <= 2 ? 'disabled' : ''}>− color</button></div>` : '';
+  return `<div class="fxcard">
+    <div class="row"><strong>${esc(typeName)}</strong><span class="hint grow">${esc(names.length > 3 ? names.length + ' equipos' : names.join(', '))}</span>
+      <button class="ghost small" data-fxdel="${f.id}">Quitar</button></div>
+    <label class="hint row" style="gap:6px;margin:6px 0"><input type="checkbox" data-fx="${f.id}" data-k="sync" ${f.sync ? 'checked' : ''}> Al tempo (${Math.round(S.bpm)} BPM)</label>
+    ${speed}${size}${frontExtra}
+    ${fxSlider(f, 'spread', 'Desfase', 0, 1)}
+    ${colors}
+    <div class="row">${front ? `<button class="small ${f.mirror ? 'on' : 'ghost'}" data-fx="${f.id}" data-k="mirror" title="Los de la izquierda se mueven al revés que los de la derecha">Espejo</button>` : ''}
+      <button class="small ${f.reverse ? 'on' : 'ghost'}" data-fx="${f.id}" data-k="reverse">Invertir dirección</button></div>
+  </div>`;
+}
 function renderFxList() {
-  if (!changed('fx', S.fx.map((f) => [f.id, f.type, f.ids, f.sync, f.beats, f.hz, f.size, f.spread, f.reverse, f.colors]))) return;
-  if (dragging && dragging.closest('#fxList')) { sigs.fx = null; return; }
-  const names = (ids) => ids.map((i) => fx(i)?.name).filter(Boolean);
-  $('#fxList').innerHTML = S.fx.length ? S.fx.map((f) => {
-    const n = names(f.ids);
-    const typeName = INIT.fx_types[f.type]?.name || f.type;
-    const speed = f.sync
-      ? `<div class="slider"><label>Una vuelta cada</label><select data-fx="${f.id}" data-k="beats">${[1, 2, 4, 8, 16, 32].map((b) => `<option value="${b}" ${+f.beats === b ? 'selected' : ''}>${b} tiempo${b > 1 ? 's' : ''}</option>`).join('')}</select><output></output></div>`
-      : `<div class="slider"><label>Velocidad</label><input type="range" min="0.02" max="4" step="0.01" value="${f.hz}" data-fx="${f.id}" data-k="hz"><output>${(+f.hz).toFixed(2)}/s</output></div>`;
-    const size = FX_SIZE_LABEL[f.type] ? `<div class="slider"><label>${FX_SIZE_LABEL[f.type]}</label><input type="range" min="0" max="1" step="0.01" value="${f.size}" data-fx="${f.id}" data-k="size"><output>${pct(f.size)}</output></div>` : '';
-    const colors = f.type === 'colores' ? `<div class="row" style="margin:6px 0">
-        ${f.colors.map((c, i) => `<input type="color" value="${esc(c)}" data-fxc="${f.id}" data-i="${i}">`).join('')}
-        <button class="ghost small" data-fxcadd="${f.id}" ${f.colors.length >= 6 ? 'disabled' : ''}>+ color</button>
-        <button class="ghost small" data-fxcdel="${f.id}" ${f.colors.length <= 2 ? 'disabled' : ''}>− color</button></div>` : '';
-    return `<div class="fxcard">
-      <div class="row"><strong>${esc(typeName)}</strong><span class="hint grow">${esc(n.length > 3 ? n.length + ' equipos' : n.join(', '))}</span>
-        <button class="ghost small" data-fxdel="${f.id}">Quitar</button></div>
-      <label class="hint row" style="gap:6px;margin:6px 0"><input type="checkbox" data-fx="${f.id}" data-k="sync" ${f.sync ? 'checked' : ''}> Al tempo (${Math.round(S.bpm)} BPM)</label>
-      ${speed}${size}
-      <div class="slider"><label>Desfase</label><input type="range" min="0" max="1" step="0.01" value="${f.spread}" data-fx="${f.id}" data-k="spread"><output>${pct(f.spread)}</output></div>
-      ${colors}
-      <div class="row"><button class="small ${f.reverse ? 'on' : 'ghost'}" data-fx="${f.id}" data-k="reverse">Invertir dirección</button></div>
-    </div>`;
-  }).join('') : '<p class="hint">No hay efectos corriendo. Elegí equipos y tocá un efecto de arriba.</p>';
+  if (!changed('fx', S.fx)) return;
+  if (dragging && dragging.closest('#fxList, #movList')) { sigs.fx = null; return; }
+  const other = S.fx.filter((f) => !isMove(f)), moves = S.fx.filter(isMove);
+  $('#fxList').innerHTML = other.length ? other.map(fxCard).join('')
+    : '<p class="hint">No hay efectos corriendo. Elegí equipos y tocá un efecto de arriba.</p>';
+  $('#movList').innerHTML = moves.length ? '<h3>Movimiento en marcha</h3>' + moves.map(fxCard).join('') : '';
+}
+
+/* ------------------------------------------------------------ movimientos frontales */
+const HEAD_COLORS = ['#ff5aa0', '#ffc24a', '#4fd18b', '#33c8ff', '#b48cff', '#ff8a3d'];
+const sx = (x) => (50 + Math.max(-1.35, Math.min(1.35, x)) / 1.35 * 46).toFixed(2);
+const sy = (y) => (50 - Math.max(-1.35, Math.min(1.35, y)) / 1.35 * 42).toFixed(2);
+function moveTargets() {
+  const m = selWith('mover');
+  return m.length ? m : (S ? S.movers : []);
+}
+function buildMovStatic() {
+  const cat = INIT.frontal;
+  const svgPaths = (paths) => {
+    const all = paths.flat();
+    const xs = all.map((q) => q[0]), ys = all.map((q) => q[1]);
+    const w = Math.max(...xs) - Math.min(...xs), h = Math.max(...ys) - Math.min(...ys);
+    const k = 80 / Math.max(w, h * 1.4, 0.4);
+    const cx = (Math.max(...xs) + Math.min(...xs)) / 2, cy = (Math.max(...ys) + Math.min(...ys)) / 2;
+    const P = ([x, y]) => [(50 + (x - cx) * k).toFixed(1), (50 - (y - cy) * k).toFixed(1)];
+    const snap = Math.round(paths[0].length * 0.18);
+    return `<svg viewBox="0 0 100 100" aria-hidden="true">
+      ${paths.map((pts, i) => `<polyline points="${pts.map((q) => P(q).join(',')).join(' ')}" stroke="${HEAD_COLORS[i % HEAD_COLORS.length]}"/>`).join('')}
+      ${paths.map((pts, i) => { const [x, y] = P(pts[snap]); return `<circle cx="${x}" cy="${y}" r="5" fill="${HEAD_COLORS[i % HEAD_COLORS.length]}"/>`; }).join('')}</svg>`;
+  };
+  $('#movPresets').innerHTML = cat.presets.map((p, i) => `<button data-mpreset="${i}">${svgPaths(p.paths)}<span>${esc(p.name)}</span></button>`).join('');
+  $('#layouts').innerHTML = cat.layouts.map((l) => `<button data-layout="${l.id}"><svg viewBox="0 0 100 60" aria-hidden="true"><line x1="4" y1="30" x2="96" y2="30" class="hz"/>
+    ${l.points.map(([x, y], k) => `<line x1="${20 + k * 20}" y1="58" x2="${sx(x)}" y2="${(30 - Math.max(-1.35, Math.min(1.35, y)) / 1.35 * 26).toFixed(1)}" stroke="${HEAD_COLORS[k]}" class="ray"/>`).join('')}
+    </svg><span>${esc(l.name)}</span></button>`).join('');
+}
+function renderMov() {
+  const r = S.rig || {};
+  const movers = S.movers || [];
+  $('#frontWarn').style.display = r.calibrated || !movers.length ? 'none' : '';
+  const t = moveTargets();
+  $('#movTarget').textContent = !movers.length ? 'No hay cabezales en el show'
+    : selWith('mover').length ? `Se aplica a los ${t.length} elegidos` : `Se aplica a los ${t.length} cabezales`;
+  setVal($('#flipX'), r.flip_x); setVal($('#flipY'), r.flip_y); setVal($('#revOrder'), r.reverse_order);
+  setVal($('#spanX'), r.span_x); setVal($('#spanY'), r.span_y);
+  $('#spanXVal').textContent = Math.round(r.span_x) + '°';
+  $('#spanYVal').textContent = Math.round(r.span_y) + '°';
+  const done = movers.filter((i) => r.front && r.front[i]).length;
+  $('#frontSummary').textContent = movers.length ? `${done} de ${movers.length} listos` : '';
+  if (changed('frontStatus', [movers, r.front, movers.map((i) => fx(i)?.name)])) {
+    $('#frontStatus').innerHTML = movers.map((i, k) => `<span class="fchip ${r.front && r.front[i] ? 'ok' : ''}">${k + 1}. ${esc(fx(i)?.name || '')}${r.front && r.front[i] ? ' ✓' : ''}</span>`).join('');
+    if (!r.calibrated && !$('#frontBox').dataset.touched) $('#frontBox').open = true;
+  }
+  if (changed('audDots', movers)) {
+    $$('#audView .adot').forEach((d) => d.remove());
+    movers.forEach((id, k) => {
+      const d = document.createElement('span'); d.className = 'adot'; d.dataset.id = id; d.textContent = k + 1;
+      $('#audView').appendChild(d);
+    });
+  }
+  drawAudience();
+}
+function drawAudience() {
+  if (!S) return;
+  for (const d of $$('#audView .adot')) {
+    const p = LIVE.pv[d.dataset.id];
+    if (!p || p.x == null) continue;
+    d.style.left = sx(p.x) + '%'; d.style.top = sy(p.y) + '%';
+    d.style.setProperty('--c', p.c); d.style.setProperty('--d', p.d);
+  }
 }
 
 /* ------------------------------------------------------------ escenas */
@@ -551,6 +642,11 @@ function buildStatic() {
   $('#fade').oninput = (e) => { $('#fadeVal').textContent = (+e.target.value).toFixed(1) + ' s'; sendLatest('fade', 'show_settings', { fade: +e.target.value }); };
   $('#master').oninput = (e) => { $('#masterVal').textContent = pct(+e.target.value); sendLatest('master', 'master', { value: +e.target.value }); };
   $('#btnBlackout').onclick = () => api('blackout', { on: !S.blackout });
+  $('#btnClear').onclick = async () => {
+    if (!(await api('clear_all'))) return;
+    sel.clear(); lastScene = null; sigs.scenes = null; selectionChanged(); renderScenes();
+    toast('Todo a cero', false, { label: 'Deshacer', fn: () => api('undo_clear').then((ok) => ok && toast('Listo, volvió como estaba')) });
+  };
   for (const [k, b] of [['flash', '#btnFlash'], ['strobe', '#btnStrobe'], ['humo', '#btnHumo']]) {
     const el = $(b);
     const on = (e) => { e.preventDefault(); el.setPointerCapture?.(e.pointerId); el.classList.add('held'); api('hold', { kind: k, on: true }); };
@@ -625,33 +721,89 @@ function buildStatic() {
       if (await api('add_fx', { ids: selIds(), type, params })) toast((INIT.fx_types[type]?.name || 'Efecto') + ' en marcha');
     }
   });
-  const fxList = $('#fxList');
-  fxList.addEventListener('input', (e) => {
-    const t = e.target;
-    if (t.dataset.fx && t.type === 'range') {
-      const out = t.parentElement.querySelector('output');
-      if (out) out.textContent = t.dataset.k === 'hz' ? (+t.value).toFixed(2) + '/s' : pct(+t.value);
-      sendLatest('fx' + t.dataset.fx + t.dataset.k, 'update_fx', { id: t.dataset.fx, params: { [t.dataset.k]: +t.value } });
+  for (const list of [$('#fxList'), $('#movList')]) {
+    list.addEventListener('input', (e) => {
+      const t = e.target;
+      if (t.dataset.fx && t.type === 'range') {
+        const out = t.parentElement.querySelector('output');
+        if (out) out.textContent = t.dataset.k === 'hz' ? (+t.value).toFixed(2) + '/s' : t.dataset.fmt === 'signed' ? signed(+t.value) : pct(+t.value);
+        sendLatest('fx' + t.dataset.fx + t.dataset.k, 'update_fx', { id: t.dataset.fx, params: { [t.dataset.k]: +t.value } });
+      }
+      if (t.dataset.fxc) {
+        const f = S.fx.find((x) => x.id === t.dataset.fxc); if (!f) return;
+        const colors = [...f.colors]; colors[+t.dataset.i] = t.value;
+        sendLatest('fxc' + f.id, 'update_fx', { id: f.id, params: { colors } });
+      }
+    });
+    list.addEventListener('change', (e) => {
+      const t = e.target;
+      if (t.dataset.fx && t.type === 'checkbox') api('update_fx', { id: t.dataset.fx, params: { [t.dataset.k]: t.checked } });
+      if (t.dataset.fx && t.tagName === 'SELECT') api('update_fx', { id: t.dataset.fx, params: { [t.dataset.k]: +t.value } });
+    });
+    list.addEventListener('click', (e) => {
+      const t = e.target.closest('button'); if (!t) return;
+      if (t.dataset.fxdel) api('remove_fx', { id: t.dataset.fxdel });
+      if (t.dataset.k === 'reverse' || t.dataset.k === 'mirror') {
+        const f = S.fx.find((x) => x.id === t.dataset.fx); api('update_fx', { id: t.dataset.fx, params: { [t.dataset.k]: !f[t.dataset.k] } });
+      }
+      const palette = ['#ff2020', '#2a46ff', '#22e04a', '#ffd60a', '#ff2ae6', '#22e6ee'];
+      if (t.dataset.fxcadd) { const f = S.fx.find((x) => x.id === t.dataset.fxcadd); api('update_fx', { id: f.id, params: { colors: [...f.colors, palette[f.colors.length % palette.length]] } }); }
+      if (t.dataset.fxcdel) { const f = S.fx.find((x) => x.id === t.dataset.fxcdel); api('update_fx', { id: f.id, params: { colors: f.colors.slice(0, -1) } }); }
+    });
+  }
+
+  // movimientos frontales
+  buildMovStatic();
+  const needMovers = () => { const t = moveTargets(); if (!t.length) toast('No hay cabezales en el show'); return t; };
+  $('#movPresets').addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-mpreset]'); if (!b) return;
+    const t = needMovers(); if (!t.length) return;
+    const p = INIT.frontal.presets[+b.dataset.mpreset];
+    if (await api('add_fx', { ids: t, type: p.type, params: { ...p.params, name: p.name } })) toast(p.name + ' en marcha');
+  });
+  $('#layouts').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-layout]'); if (!b) return;
+    const t = needMovers(); if (t.length) api('front_layout', { ids: t, name: b.dataset.layout });
+  });
+  $('#btnFrontSave').onclick = async () => {
+    const m = selWith('mover');
+    if (!m.length) { toast('Primero tocá el cabezal que ya apuntaste al frente'); return; }
+    const n = await api('front_save', { ids: m });
+    if (n) toast(n > 1 ? `Frente guardado para ${n} cabezales` : 'Frente guardado. Seguí con el próximo cabezal.');
+  };
+  $('#frontBox').addEventListener('toggle', () => { $('#frontBox').dataset.touched = '1'; });
+  $('#frontBox').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-ftest]'); if (!b) return;
+    const [x, y] = b.dataset.ftest.split(',').map(Number);
+    const t = needMovers(); if (t.length) api('front_test', { ids: t, x, y });
+  });
+  $('#flipX').onchange = (e) => api('rig_set', { flip_x: e.target.checked });
+  $('#flipY').onchange = (e) => api('rig_set', { flip_y: e.target.checked });
+  $('#revOrder').onchange = (e) => api('rig_set', { reverse_order: e.target.checked });
+  $('#spanX').oninput = (e) => { $('#spanXVal').textContent = e.target.value + '°'; sendLatest('spanX', 'rig_set', { span_x: +e.target.value }); };
+  $('#spanY').oninput = (e) => { $('#spanYVal').textContent = e.target.value + '°'; sendLatest('spanY', 'rig_set', { span_y: +e.target.value }); };
+
+  // ajuste fino (en grados)
+  let nudgeStep = 1;
+  for (const box of $$('[data-nudgebox]')) box.innerHTML = `
+    <button class="ghost small" data-nudge="-1,0" title="Pan hacia un lado">Pan ◀</button>
+    <button class="ghost small" data-nudge="1,0" title="Pan hacia el otro lado">Pan ▶</button>
+    <button class="ghost small" data-nudge="0,1" title="Tilt hacia un lado">Tilt ▲</button>
+    <button class="ghost small" data-nudge="0,-1" title="Tilt hacia el otro lado">Tilt ▼</button>
+    <span class="steppick"><button class="small on" data-step="1">1°</button><button class="small ghost" data-step="5">5°</button></span>`;
+  document.addEventListener('click', (e) => {
+    const st = e.target.closest('[data-step]');
+    if (st) { nudgeStep = +st.dataset.step; $$('[data-step]').forEach((b) => b.className = 'small ' + (+b.dataset.step === nudgeStep ? 'on' : 'ghost')); return; }
+    const n = e.target.closest('[data-nudge]');
+    if (n) {
+      const m = selWith('mover'); if (!m.length) { toast('Elegí un cabezal'); return; }
+      const [dp, dt] = n.dataset.nudge.split(',').map(Number);
+      api('nudge', { ids: m, pan: dp * nudgeStep, tilt: dt * nudgeStep });
     }
-    if (t.dataset.fxc) {
-      const f = S.fx.find((x) => x.id === t.dataset.fxc); if (!f) return;
-      const colors = [...f.colors]; colors[+t.dataset.i] = t.value;
-      sendLatest('fxc' + f.id, 'update_fx', { id: f.id, params: { colors } });
-    }
+    const g = e.target.closest('[data-goto]');
+    if (g) { e.preventDefault(); $(`#progTabs [data-p=${g.dataset.goto}]`).click(); }
   });
-  fxList.addEventListener('change', (e) => {
-    const t = e.target;
-    if (t.dataset.fx && t.type === 'checkbox') api('update_fx', { id: t.dataset.fx, params: { [t.dataset.k]: t.checked } });
-    if (t.dataset.fx && t.tagName === 'SELECT') api('update_fx', { id: t.dataset.fx, params: { [t.dataset.k]: +t.value } });
-  });
-  fxList.addEventListener('click', (e) => {
-    const t = e.target.closest('button'); if (!t) return;
-    if (t.dataset.fxdel) api('remove_fx', { id: t.dataset.fxdel });
-    if (t.dataset.k === 'reverse') { const f = S.fx.find((x) => x.id === t.dataset.fx); api('update_fx', { id: t.dataset.fx, params: { reverse: !f.reverse } }); }
-    const palette = ['#ff2020', '#2a46ff', '#22e04a', '#ffd60a', '#ff2ae6', '#22e6ee'];
-    if (t.dataset.fxcadd) { const f = S.fx.find((x) => x.id === t.dataset.fxcadd); api('update_fx', { id: f.id, params: { colors: [...f.colors, palette[f.colors.length % palette.length]] } }); }
-    if (t.dataset.fxcdel) { const f = S.fx.find((x) => x.id === t.dataset.fxcdel); api('update_fx', { id: f.id, params: { colors: f.colors.slice(0, -1) } }); }
-  });
+
   $('#btnFxClearSel').onclick = () => needSel() && api('remove_fx', { ids: selIds() });
 
   // escenas
