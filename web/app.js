@@ -766,6 +766,13 @@ function buildStatic() {
     const b = e.target.closest('[data-layout]'); if (!b) return;
     const t = needMovers(); if (t.length) api('front_layout', { ids: t, name: b.dataset.layout });
   });
+  $('#btnMovStop').onclick = () => {
+    const t = moveTargets(); const ids = S.fx.filter(isMove).flatMap((f) => f.ids.filter((i) => t.includes(i)));
+    if (!ids.length) { toast('No hay movimiento andando'); return; }
+    // quita solo los movimientos (deja colores e intensidad)
+    for (const f of S.fx.filter(isMove)) if (f.ids.some((i) => t.includes(i))) api('remove_fx', { id: f.id });
+    toast('Movimiento frenado: quedan en su posición');
+  };
   $('#btnFrontSave').onclick = async () => {
     const m = selWith('mover');
     if (!m.length) { toast('Primero tocá el cabezal que ya apuntaste al frente'); return; }

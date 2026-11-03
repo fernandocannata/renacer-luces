@@ -235,6 +235,17 @@ class Engine:
                 self._set(fid, "pan", clamp(center + spread * (k / (n - 1) - 0.5)))
             self.changed()
 
+    def home_look(self, fid):
+        """Estado de reposo de un equipo: apagado y, si es cabezal calibrado, al frente."""
+        prof = self.profile_of(fid)
+        if not prof:
+            return {}
+        d = default_look(prof)
+        front = self.show.get("rig", {}).get("front", {}).get(fid)
+        if front and "pan" in d:
+            d["pan"], d["tilt"] = front[0], front[1]
+        return d
+
     def locate(self, ids):
         """Ubicar: prende a full en blanco, centrado, sin gobo ni prisma."""
         with self.lock:
@@ -242,7 +253,7 @@ class Engine:
                 prof = self.profile_of(fid)
                 if not prof:
                     continue
-                d = default_look(prof)
+                d = self.home_look(fid)
                 d.pop("smoke", None)
                 if "dim" in d:
                     d["dim"] = 1.0
@@ -257,9 +268,8 @@ class Engine:
             targets = ids or list(self.look.keys())
             self._start_fade(fade)
             for fid in targets:
-                prof = self.profile_of(fid)
-                if prof:
-                    self.look[fid] = default_look(prof)
+                if self.profile_of(fid):
+                    self.look[fid] = self.home_look(fid)
             if ids:
                 self._drop_fx(ids, None)
             else:
@@ -346,8 +356,7 @@ class Engine:
             for fid in targets:
                 pan, tilt = self.xy_to_pt(fid, *fn(self.mover_u(fid)))
                 self.look[fid]["pan"], self.look[fid]["tilt"] = pan, tilt
-            self._drop_fx(targets, "pos")
-            self.changed()
+            self.changed()  # si hay un movimiento corriendo, sigue desde la posición nueva
 
     def front_test(self, ids, x, y):
         """Mueve los cabezales a un punto del público (para verificar direcciones)."""
@@ -392,9 +401,8 @@ class Engine:
                           "master": self.master, "blackout": self.blackout, "cue_index": self.cue_index}
             self.fade = None
             for f in self.show["fixtures"]:
-                prof = self.lib.get(f["profile"])
-                if prof:
-                    self.look[f["id"]] = default_look(prof)
+                if self.lib.get(f["profile"]):
+                    self.look[f["id"]] = self.home_look(f["id"])
             self.fx = []
             self.master = 1.0
             self.blackout = False
@@ -519,8 +527,10 @@ class Engine:
             if t.startswith("f_"):
                 fids = [i for i in self.movers() if i in set(ids)]
                 for k, fid in enumerate(fids):
-                    x, y = frontal.fx_xy(fx, self.mover_u(fid), k, len(fids), ph, fx["id"] + fid)
-                    pan, tilt = self.xy_to_pt(fid, x, y)
+                    # el movimiento se suma a la posición actual del cabezal (abanico, en V, etc.)
+                    bx, by = self.pt_to_xy(fid, cur[fid]["pan"], cur[fid].get("tilt", 0.5))
+                    dx, dy = frontal.fx_xy(fx, self.mover_u(fid), k, len(fids), ph, fx["id"] + fid)
+                    pan, tilt = self.xy_to_pt(fid, bx + dx, by + dy)
                     cur[fid]["pan"], cur[fid]["tilt"] = pan, tilt
                 continue
             for k, fid in enumerate(ids):

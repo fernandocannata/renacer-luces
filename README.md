@@ -63,7 +63,10 @@ Cabezales, Pares LED, 1-3-5, primera mitad…
 *Movimientos* está todo pensado de frente: posiciones fijas (al frente, al
 público, abanico, cruzados, a los costados, en V, escalera, foco al centro) y
 16 movimientos (círculos, ochos, barridos, espejo, ola, cascada, tijera,
-abanico, péndulo, cuadrado, búsqueda al azar…). Cada movimiento se ajusta con
+abanico, péndulo, cuadrado, búsqueda al azar…). Los movimientos arrancan desde la posición actual de
+cada cabezal: elegí primero una posición (abanico, en V…) y después el
+movimiento; podés cambiar de posición con el movimiento andando, y
+*Frenar movimiento* los deja quietos donde están. Cada movimiento se ajusta con
 tamaño, altura, apertura, escalón, desfase, espejo y velocidad al tempo. Si no
 elegiste cabezales, se aplica a todos.
 

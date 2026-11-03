@@ -110,3 +110,31 @@ def test_clear_todo_y_deshacer():
     # el frente calibrado sobrevive al clear
     e.clear_all()
     assert e.rig()["calibrated"] and len(e.rig()["front"]) == 4
+
+
+def test_movimiento_arranca_desde_la_posicion_actual():
+    e = make()
+    e.front_layout(CAB, "abanico", fade=0)
+    base = {f: e.pt_to_xy(f, e.look[f]["pan"], e.look[f]["tilt"]) for f in CAB}
+    e.add_fx(CAB, "f_circulo", {"size": 0.3})
+    t = time.monotonic()
+    xs = {f: [] for f in CAB}
+    for k in range(40):
+        e.tick(t + k * 0.05)
+        for f in CAB:
+            xs[f].append(e.preview[f]["x"])
+    for f in CAB:
+        centro = (max(xs[f]) + min(xs[f])) / 2
+        assert abs(centro - base[f][0]) < 0.08, (f, centro, base[f][0])
+        assert max(xs[f]) - min(xs[f]) > 0.3  # se está moviendo
+    # cambiar de posición no corta el movimiento
+    e.front_layout(CAB, "cruzados", fade=0)
+    assert any(x["type"] == "f_circulo" for x in e.fx)
+
+
+def test_clear_deja_los_cabezales_al_frente():
+    e = make()
+    e.front_layout(CAB, "abanico", fade=0)
+    e.clear_all()
+    for k, f in enumerate(CAB):
+        assert abs(e.look[f]["pan"] - (0.3 + 0.1 * k)) < 1e-6 and abs(e.look[f]["tilt"] - 0.95) < 1e-6
