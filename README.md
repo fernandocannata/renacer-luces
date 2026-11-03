@@ -77,6 +77,26 @@ y tocá *Este es su frente*. Repetí con cada uno. Después usá los botones
 tildá la opción que corresponda. Colgados, los cabezales casi no suben más
 allá de la horizontal: el programa achata el movimiento para que entre.
 
+**Las opciones se adaptan a lo que elegís.** Con solo cabezales aparecen
+Posición, Movimientos y la rueda de color; con solo pares, sus efectos de
+color; si elegís todo, solo lo que tienen en común.
+
+**Efectos para los pares.** Persecución, rebote, llenado, onda, respiración,
+aleatorio, chispas, relámpago, pares e impares, arcoíris, ola arcoíris,
+alternar colores, pares e impares de color, mitades y fuego. Cada uno muestra
+un dibujito de cómo se ve.
+
+**Sumar movimientos.** En *Movimientos*, prendé *Sumar movimientos* y cada
+movimiento nuevo se suma a los que ya andan (hasta 4). Apagado, reemplaza.
+
+**Strobo 2.** Botón al lado de Strobo (tecla **A**). La flechita ▾ abre el
+ritmo: al tempo (cada 2 tiempos, 1, 2 o 4 por tiempo) o libre (hasta 12 por
+segundo), y si los destellos son en blanco.
+
+**Calibrar la rueda de color y los gobos.** En *Probar canales*, elegí un
+cabezal: *Prender el equipo para ver*, mové la rueda hasta ver un color entero
+y tocá su nombre. Repetí con todos y tocá *Guardar perfil*.
+
 **Clear.** Vuelve todo a cero, como recién abierto (luces apagadas, sin
 efectos, master al 100%, sin blackout). Durante unos segundos aparece
 *Deshacer* por si lo tocaste sin querer. No borra escenas ni el frente.
@@ -101,7 +121,8 @@ mientras los mantenés apretados. *Blackout* apaga todo hasta que lo vuelvas a t
 | T | Tap de tempo |
 | F / S / H (mantener) | Flash, strobo, humo |
 | B | Blackout |
-| A / Esc | Seleccionar todo / nada |
+| A (mantener) | Strobo 2 |
+| Ctrl+A / Esc | Seleccionar todo / nada |
 
 ## Desde el celular
 

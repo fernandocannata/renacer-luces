@@ -159,8 +159,9 @@ function renderTop() {
   setVal($('#master'), S.master);
   $('#masterVal').textContent = pct(S.master);
   $('#btnBlackout').classList.toggle('on', S.blackout);
-  for (const [k, b] of [['flash', '#btnFlash'], ['strobe', '#btnStrobe'], ['humo', '#btnHumo']])
+  for (const [k, b] of [['flash', '#btnFlash'], ['strobe', '#btnStrobe'], ['strobe2', '#btnStrobe2']])
     $(b).classList.toggle('held', S.holds.includes(k));
+  renderStrobe2();
   if (S.output) renderOut(S.output);
 }
 
@@ -171,6 +172,18 @@ function renderOut(o) {
   $('#outLbl').textContent = o.kind === 'sim' ? 'Simulador' : o.connected ? 'Interfaz conectada' : 'Interfaz no encontrada';
   const det = $('#outDetail');
   if (det) det.textContent = o.label + (o.connected ? ` — enviando ${Math.round(o.fps || 0)} cuadros por segundo.` : '') + (o.error ? ' ' + o.error : '');
+}
+
+/* ------------------------------------------------------------ strobo 2 */
+function renderStrobe2() {
+  const st = (S.settings && S.settings.strobe2) || {};
+  for (const r of $$('input[name=s2mode]')) r.checked = (r.value === 'sync') === !!st.sync;
+  $$('[data-s2div]').forEach((b) => (b.className = 'small ' + (st.sync && +b.dataset.s2div === +st.div ? 'on' : 'ghost')));
+  setVal($('#s2hz'), st.hz);
+  $('#s2hzVal').textContent = (+st.hz || 0).toFixed(1) + '/s';
+  setVal($('#s2white'), st.white);
+  const rate = st.sync ? S.bpm / 60 * st.div : st.hz;
+  $('#s2rate').textContent = `Ahora: ${rate.toFixed(1).replace('.0', '')} destellos por segundo${st.sync ? ' a ' + Math.round(S.bpm) + ' BPM' : ''}.` + (rate > 12 ? ' Más de 12 por segundo puede verse irregular.' : '');
 }
 
 /* ------------------------------------------------------------ equipos */
@@ -261,8 +274,52 @@ function selectionChanged() {
 }
 
 /* ------------------------------------------------------------ programador */
+/* qué se puede hacer con lo elegido: solo lo que TODOS admiten */
+function availability(ids) {
+  const every = (fn) => ids.length > 0 && ids.every((i) => fn(capsOf(i)));
+  const haz = ['cw', 'gobo', 'prism', 'focus', 'strobe'].filter((c) => every((cs) => cs.has(c)));
+  const a = {
+    dim: every((c) => c.has('dim')), mover: every((c) => c.has('mover')),
+    color: every((c) => c.has('rgb') || c.has('cw')), rgb: every((c) => c.has('rgb')), haz,
+  };
+  a.tabs = ids.length ? { color: a.dim, pos: a.mover, mov: a.mover, haz: haz.length > 0, fx: a.dim || a.color }
+    : { color: true, pos: true, mov: true, haz: true, fx: true };
+  return a;
+}
+function renderTabs(ids, av) {
+  let firstVisible = null, activeHidden = false;
+  for (const b of $$('#progTabs button')) {
+    const ok = av.tabs[b.dataset.p] !== false;
+    b.hidden = !ok;
+    if (ok && !firstVisible) firstVisible = b;
+    if (!ok && b.classList.contains('on')) activeHidden = true;
+  }
+  if (activeHidden && firstVisible) firstVisible.click();
+  const kinds = [...new Set(ids.map(typeOf))].map((t) => TYPE_LABEL[t] || t);
+  $('#selKind').textContent = !kinds.length ? ''
+    : kinds.length === 1 ? 'Opciones para ' + kinds[0]
+    : kinds.slice(0, -1).join(', ') + ' y ' + kinds.at(-1) + ': solo lo que tienen en común';
+  $('#selKind').style.display = kinds.length ? '' : 'none';
+}
+function renderFxPresets(ids, av) {
+  const okFor = (need) => !ids.length || (need === 'dim' ? av.dim : need === 'rgb' ? av.rgb : av.color);
+  if (!changed('fxPresets', [ids.length, av.dim, av.color, av.rgb])) return;
+  const grid = (rows) => `<svg viewBox="0 0 80 48" preserveAspectRatio="none" aria-hidden="true">${rows.map((row, r) =>
+    row.map(([c, d], k) => `<rect x="${k * 10 + 0.6}" y="${r * 4 + 0.4}" width="8.8" height="3.2" rx="1" fill="${c}" opacity="${(0.07 + 0.93 * d).toFixed(2)}"/>`).join('')).join('')}</svg>`;
+  const btns = (fam) => INIT.efectos.filter((p) => p.family === fam && okFor(p.needs))
+    .map((p) => `<button data-fxpreset="${p.id}">${grid(p.grid)}<span>${esc(p.name)}</span></button>`).join('');
+  const dimB = btns('dim'), colB = btns('color');
+  $('#fxDim').innerHTML = dimB; $('#fxCol').innerHTML = colB;
+  $('#fxDimTitle').style.display = dimB ? '' : 'none';
+  $('#fxColTitle').style.display = colB ? '' : 'none';
+  $('#fxNone').textContent = dimB || colB ? '' : 'Lo que elegiste no tiene efectos en común.';
+}
+
 function renderProgrammer() {
   const ids = selIds();
+  const av = availability(ids);
+  renderTabs(ids, av);
+  renderFxPresets(ids, av);
   $('#noSel').style.display = ids.length ? 'none' : '';
   const dim = firstVal('dim', 'dim');
   setVal($('#dim'), dim ?? 0);
@@ -278,7 +335,7 @@ function renderProgrammer() {
   $('#ptsVal').textContent = pts == null ? '—' : (pts < 0.05 ? 'máxima' : pct(1 - pts));
 
   // haz
-  const has = (c) => selWith(c).length > 0;
+  const has = (c) => av.haz.includes(c) || (c === 'prot' && av.haz.includes('prism'));
   $('#hazCw').style.display = has('cw') ? '' : 'none';
   $('#hazGobo').style.display = has('gobo') ? '' : 'none';
   $('#hazPrism').style.display = has('prism') || has('prot') ? '' : 'none';
@@ -343,14 +400,15 @@ function fxCard(f) {
   const speed = f.sync
     ? `<div class="slider"><label>Una vuelta cada</label><select data-fx="${f.id}" data-k="beats">${[1, 2, 4, 8, 16, 32].map((b) => `<option value="${b}" ${+f.beats === b ? 'selected' : ''}>${b} tiempo${b > 1 ? 's' : ''}</option>`).join('')}</select><output></output></div>`
     : `<div class="slider"><label>Velocidad</label><input type="range" min="0.02" max="4" step="0.01" value="${f.hz}" data-fx="${f.id}" data-k="hz"><output>${(+f.hz).toFixed(2)}/s</output></div>`;
-  const size = front ? fxSlider(f, 'size', 'Tamaño', 0, 1)
-    : FX_SIZE_LABEL[f.type] ? fxSlider(f, 'size', FX_SIZE_LABEL[f.type], 0, 1) : '';
+  const sizeLabel = (INIT.size_labels || {})[f.type] || FX_SIZE_LABEL[f.type];
+  const size = front ? fxSlider(f, 'size', 'Tamaño', 0, 1) : sizeLabel ? fxSlider(f, 'size', sizeLabel, 0, 1) : '';
   const frontExtra = front ? fxSlider(f, 'altura', 'Altura', -1, 1, 'signed')
     + fxSlider(f, 'apertura', 'Apertura', -1, 1, 'signed') + fxSlider(f, 'escalon', 'Escalón', -1, 1, 'signed') : '';
-  const colors = f.type === 'colores' ? `<div class="row" style="margin:6px 0">
-      ${f.colors.map((c, i) => `<input type="color" value="${esc(c)}" data-fxc="${f.id}" data-i="${i}">`).join('')}
-      <button class="ghost small" data-fxcadd="${f.id}" ${f.colors.length >= 6 ? 'disabled' : ''}>+ color</button>
-      <button class="ghost small" data-fxcdel="${f.id}" ${f.colors.length <= 2 ? 'disabled' : ''}>− color</button></div>` : '';
+  const many = f.type === 'colores';
+  const colors = ['colores', 'alternar', 'mitades'].includes(f.type) ? `<div class="row" style="margin:6px 0">
+      ${(many ? f.colors : f.colors.slice(0, 2)).map((c, i) => `<input type="color" value="${esc(c)}" data-fxc="${f.id}" data-i="${i}">`).join('')}
+      ${many ? `<button class="ghost small" data-fxcadd="${f.id}" ${f.colors.length >= 6 ? 'disabled' : ''}>+ color</button>
+      <button class="ghost small" data-fxcdel="${f.id}" ${f.colors.length <= 2 ? 'disabled' : ''}>− color</button>` : ''}</div>` : '';
   return `<div class="fxcard">
     <div class="row"><strong>${esc(typeName)}</strong><span class="hint grow">${esc(names.length > 3 ? names.length + ' equipos' : names.join(', '))}</span>
       <button class="ghost small" data-fxdel="${f.id}">Quitar</button></div>
@@ -368,7 +426,7 @@ function renderFxList() {
   const other = S.fx.filter((f) => !isMove(f)), moves = S.fx.filter(isMove);
   $('#fxList').innerHTML = other.length ? other.map(fxCard).join('')
     : '<p class="hint">No hay efectos corriendo. Elegí equipos y tocá un efecto de arriba.</p>';
-  $('#movList').innerHTML = moves.length ? '<h3>Movimiento en marcha</h3>' + moves.map(fxCard).join('') : '';
+  $('#movList').innerHTML = moves.length ? `<h3>${moves.length > 1 ? moves.length + ' movimientos sumados' : 'Movimiento en marcha'}</h3>` + moves.map(fxCard).join('') : '';
 }
 
 /* ------------------------------------------------------------ movimientos frontales */
@@ -575,16 +633,62 @@ function buildProbar() {
         <span class="v">${S.test[addr] ?? '—'}</span></div>`;
     }).join('');
   const attrs = new Set(draft.canales.map((c) => c.attr));
-  const wheel = (key, title, withHex) => attrs.has(key === 'color_wheel' ? 'color_wheel' : key) ? `<div class="box"><h2>${title}</h2>
-      <p class="hint">Una posición por línea: ${withHex ? '<em>Nombre = valor DMX = #color</em>' : '<em>Nombre = valor DMX</em>'}. Probá el canal arriba para encontrar los valores.</p>
-      <textarea data-wheel="${key}">${esc((draft[key] || []).map((s) => withHex ? `${s.nombre} = ${s.dmx} = ${s.hex || '#ffffff'}` : `${s.nombre} = ${s.dmx}`).join('\n'))}</textarea></div>` : '';
+  const chAddr = (attr) => { const i = draft.canales.findIndex((c) => c.attr === attr); return i < 0 ? null : f.address + i; };
+  const wheel = (key, title, withHex) => {
+    if (!attrs.has(key)) return '';
+    const addr = chAddr(key);
+    const v = S.test[addr] ?? (draft[key]?.[0]?.dmx || 0);
+    const names = key === 'color_wheel'
+      ? WHEEL_COLORS.map(([n, h]) => `<button class="small ghost" data-wname="${esc(n)}" data-whex="${h}"><span class="chip" style="background:${h}"></span>${esc(n)}</button>`).join('')
+      : `<button class="small ghost" data-wname="Abierto">Abierto (sin ${key === 'gobo' ? 'gobo' : 'prisma'})</button><button class="small" data-wname="*">Agregar ${key === 'gobo' ? 'gobo' : 'prisma'} en este valor</button>`;
+    return `<div class="box wcal" data-wcal="${key}" data-addr="${addr}">
+      <h2>${title}: encontrar cada posición</h2>
+      <ol class="steps">
+        <li><button class="small" data-wlight>Prender el equipo para ver</button></li>
+        <li>Mové la rueda hasta que ${key === 'color_wheel' ? 'el color se vea entero, sin partirse' : 'la posición quede centrada'}.</li>
+        <li>Tocá ${key === 'color_wheel' ? 'el nombre del color que ves' : 'el botón para anotarla'}. Repetí con todas y al final tocá <b>Guardar perfil</b>.</li>
+      </ol>
+      <div class="row wdial">
+        <button class="small ghost" data-wstep="-5">−5</button><button class="small ghost" data-wstep="-1">−1</button>
+        <input type="range" min="0" max="255" value="${v}" data-wval class="grow">
+        <button class="small ghost" data-wstep="1">+1</button><button class="small ghost" data-wstep="5">+5</button>
+        <output class="addr" data-wout>${v}</output>
+      </div>
+      <div class="row wnames">${names}</div>
+      <h3>Anotadas</h3>
+      <div class="row wlist" data-wlist></div>
+      <div class="row" style="margin-top:8px"><button class="small ghost danger" data-wclear>Empezar de cero</button></div>
+      <details class="wtext"><summary class="hint">Editar como texto</summary>
+        <p class="hint">Una posición por línea: ${withHex ? '<em>Nombre = valor DMX = #color</em>' : '<em>Nombre = valor DMX</em>'}.</p>
+        <textarea data-wheel="${key}"></textarea></details>
+    </div>`;
+  };
   $('#wheelEditors').innerHTML = wheel('color_wheel', 'Rueda de color', true) + wheel('gobo', 'Gobos', false) + wheel('prism', 'Prisma', false);
+  for (const k of ['color_wheel', 'gobo', 'prism']) syncWheel(k);
   const st = draft.strobe || { off: 0, min: 10, max: 255 };
   $('#strobeEdit').style.display = attrs.has('strobe') ? '' : 'none';
   $('#strobeEdit').innerHTML = `<h2>Canal de strobo</h2><div class="row" style="margin-top:8px">
      <label class="hint">Sin strobo <input type="number" min="0" max="255" value="${st.off}" data-st="off"></label>
      <label class="hint">Más lento <input type="number" min="0" max="255" value="${st.min}" data-st="min"></label>
      <label class="hint">Más rápido <input type="number" min="0" max="255" value="${st.max}" data-st="max"></label></div>`;
+}
+const WHEEL_COLORS = [
+  ['Blanco', '#ffffff'], ['Rojo', '#ff2020'], ['Naranja', '#ff8a1a'], ['Ámbar', '#ffb030'], ['Amarillo', '#ffe21a'],
+  ['Verde', '#24e04a'], ['Verde claro', '#9dff6a'], ['Cian', '#22e6ee'], ['Celeste', '#3fd7ff'], ['Azul', '#2a4dff'],
+  ['Violeta', '#8a3dff'], ['Lavanda', '#b9a2ff'], ['Magenta', '#ff2ae6'], ['Rosa', '#ff5fc8'], ['Cálido', '#ffd29a'],
+];
+function wheelText(key) {
+  return (draft[key] || []).map((s) => key === 'color_wheel' ? `${s.nombre} = ${s.dmx} = ${s.hex || '#ffffff'}` : `${s.nombre} = ${s.dmx}`).join('\n');
+}
+function syncWheel(key) {
+  const box = $(`[data-wcal="${key}"]`); if (!box) return;
+  const list = (draft[key] || []).slice().sort((a, b) => a.dmx - b.dmx);
+  draft[key] = list;
+  $('[data-wlist]', box).innerHTML = list.length ? list.map((s, i) => `<span class="wchip" data-wjump="${s.dmx}">
+      ${s.hex ? `<span class="chip" style="background:${esc(s.hex)}"></span>` : ''}${esc(s.nombre)} <b>${s.dmx}</b>
+      <button class="small ghost" data-wdel="${i}" title="Quitar">✕</button></span>`).join('')
+    : '<span class="hint">Todavía ninguna.</span>';
+  $('[data-wheel]', box).value = wheelText(key);
 }
 function parseWheel(text, withHex) {
   return text.split('\n').map((l) => l.trim()).filter(Boolean).map((l) => {
@@ -645,12 +749,19 @@ function buildStatic() {
   $('#fade').oninput = (e) => { $('#fadeVal').textContent = (+e.target.value).toFixed(1) + ' s'; sendLatest('fade', 'show_settings', { fade: +e.target.value }); };
   $('#master').oninput = (e) => { $('#masterVal').textContent = pct(+e.target.value); sendLatest('master', 'master', { value: +e.target.value }); };
   $('#btnBlackout').onclick = () => api('blackout', { on: !S.blackout });
+  const s2pop = $('#s2Pop');
+  $('#btnS2Cfg').onclick = (e) => { e.stopPropagation(); s2pop.hidden = !s2pop.hidden; $('#btnS2Cfg').setAttribute('aria-expanded', !s2pop.hidden); };
+  document.addEventListener('click', (e) => { if (!s2pop.hidden && !e.target.closest('.s2wrap')) { s2pop.hidden = true; $('#btnS2Cfg').setAttribute('aria-expanded', false); } });
+  for (const r of $$('input[name=s2mode]')) r.onchange = () => api('strobe2_set', { sync: r.value === 'sync' });
+  s2pop.addEventListener('click', (e) => { const b = e.target.closest('[data-s2div]'); if (b) api('strobe2_set', { sync: true, div: +b.dataset.s2div }); });
+  $('#s2hz').oninput = (e) => { $('#s2hzVal').textContent = (+e.target.value).toFixed(1) + '/s'; sendLatest('s2hz', 'strobe2_set', { sync: false, hz: +e.target.value }); };
+  $('#s2white').onchange = (e) => api('strobe2_set', { white: e.target.checked });
   $('#btnClear').onclick = async () => {
     if (!(await api('clear_all'))) return;
     sel.clear(); lastScene = null; sigs.scenes = null; selectionChanged(); renderScenes();
     toast('Todo a cero', false, { label: 'Deshacer', fn: () => api('undo_clear').then((ok) => ok && toast('Listo, volvió como estaba')) });
   };
-  for (const [k, b] of [['flash', '#btnFlash'], ['strobe', '#btnStrobe'], ['humo', '#btnHumo']]) {
+  for (const [k, b] of [['flash', '#btnFlash'], ['strobe', '#btnStrobe'], ['strobe2', '#btnStrobe2']]) {
     const el = $(b);
     const on = (e) => { e.preventDefault(); el.setPointerCapture?.(e.pointerId); el.classList.add('held'); api('hold', { kind: k, on: true }); };
     const off = () => { if (!el.classList.contains('held')) return; el.classList.remove('held'); api('hold', { kind: k, on: false }); };
@@ -716,12 +827,11 @@ function buildStatic() {
 
   // efectos
   $('.ppanel[data-p=fx]').addEventListener('click', async (e) => {
-    const b = e.target.closest('.fxgrid [data-fx]');
+    const b = e.target.closest('[data-fxpreset]');
     if (b) {
       if (!needSel()) return;
-      let type = b.dataset.fx, params = {};
-      if (type === 'respirar') { type = 'onda'; params = { spread: 0, beats: 8, size: 1 }; }
-      if (await api('add_fx', { ids: selIds(), type, params })) toast((INIT.fx_types[type]?.name || 'Efecto') + ' en marcha');
+      const p = INIT.efectos.find((x) => x.id === b.dataset.fxpreset);
+      if (await api('add_fx', { ids: selIds(), type: p.type, params: { ...p.params } })) toast(p.name + ' en marcha');
     }
   });
   for (const list of [$('#fxList'), $('#movList')]) {
@@ -758,11 +868,19 @@ function buildStatic() {
   // movimientos frontales
   buildMovStatic();
   const needMovers = () => { const t = moveTargets(); if (!t.length) toast('No hay cabezales en el show'); return t; };
+  let movStack = false;
+  $('#btnMovStack').onclick = () => {
+    movStack = !movStack;
+    $('#btnMovStack').className = 'small ' + (movStack ? 'on' : 'ghost');
+    $('#btnMovStack').setAttribute('aria-pressed', movStack);
+    toast(movStack ? 'Los movimientos nuevos se suman a los que ya andan' : 'Cada movimiento nuevo reemplaza al anterior');
+  };
   $('#movPresets').addEventListener('click', async (e) => {
     const b = e.target.closest('[data-mpreset]'); if (!b) return;
     const t = needMovers(); if (!t.length) return;
     const p = INIT.frontal.presets[+b.dataset.mpreset];
-    if (await api('add_fx', { ids: t, type: p.type, params: { ...p.params, name: p.name } })) toast(p.name + ' en marcha');
+    if (await api('add_fx', { ids: t, type: p.type, params: { ...p.params, name: p.name }, stack: movStack }))
+      toast(p.name + (movStack ? ' sumado' : ' en marcha'));
   });
   $('#layouts').addEventListener('click', (e) => {
     const b = e.target.closest('[data-layout]'); if (!b) return;
@@ -881,6 +999,49 @@ function buildStatic() {
     if (t.dataset.ch != null && t.tagName === 'SELECT') { collectDraft(); draft.canales[+t.dataset.ch].attr = t.value; buildProbar(); }
     if (t.dataset.chdef != null) draft.canales[+t.dataset.chdef].default = Math.max(0, Math.min(255, +t.value || 0));
   });
+  const we = $('#wheelEditors');
+  const wSet = (box, v) => {
+    v = Math.max(0, Math.min(255, Math.round(v)));
+    $('[data-wval]', box).value = v; $('[data-wout]', box).textContent = v;
+    sendLatest('w' + box.dataset.addr, 'test_set', { address: +box.dataset.addr, value: v });
+  };
+  we.addEventListener('input', (e) => {
+    const box = e.target.closest('[data-wcal]'); if (!box) return;
+    if (e.target.matches('[data-wval]')) wSet(box, +e.target.value);
+  });
+  we.addEventListener('change', (e) => {
+    const box = e.target.closest('[data-wcal]');
+    if (box && e.target.matches('[data-wheel]')) { draft[box.dataset.wcal] = parseWheel(e.target.value, box.dataset.wcal === 'color_wheel'); syncWheel(box.dataset.wcal); }
+  });
+  we.addEventListener('click', (e) => {
+    const box = e.target.closest('[data-wcal]'); if (!box) return;
+    const key = box.dataset.wcal, b = e.target.closest('button, [data-wjump]');
+    if (!b) return;
+    const cur = +$('[data-wval]', box).value;
+    if (b.matches('[data-wlight]')) {
+      const f = fx(draftFor);
+      draft.canales.forEach((c, i) => {
+        if (c.attr === 'intensity') api('test_set', { address: f.address + i, value: 255 });
+        if (c.attr === 'strobe') api('test_set', { address: f.address + i, value: (draft.strobe || {}).off || 0 });
+      });
+      wSet(box, cur);
+      toast('Equipo prendido para calibrar');
+    } else if (b.dataset.wstep) wSet(box, cur + +b.dataset.wstep);
+    else if (b.dataset.wdel != null) { draft[key].splice(+b.dataset.wdel, 1); syncWheel(key); }
+    else if (b.dataset.wjump != null && !e.target.closest('button')) wSet(box, +b.dataset.wjump);
+    else if (b.matches('[data-wclear]')) { if (confirm('¿Borrar todas las posiciones anotadas de esta rueda?')) { draft[key] = []; syncWheel(key); } }
+    else if (b.dataset.wname) {
+      const list = draft[key] = draft[key] || [];
+      let name = b.dataset.wname;
+      if (name === '*') name = (key === 'gobo' ? 'Gobo ' : 'Prisma ') + (list.filter((x) => x.nombre !== 'Abierto').length + 1);
+      const entry = { nombre: name, dmx: cur };
+      if (key === 'color_wheel') entry.hex = b.dataset.whex;
+      const same = list.findIndex((x) => x.nombre === name);
+      if (same >= 0) list[same] = entry; else list.push(entry);
+      syncWheel(key);
+      toast(`${name} anotado en ${cur}`);
+    }
+  });
   $('#btnSaveProfile').onclick = async () => {
     if (!draft) return;
     const r = await api('profile_save', { id: draft.id, data: collectDraft() });
@@ -925,22 +1086,22 @@ function buildStatic() {
   $('#btnQuit').onclick = () => { if (confirm('Se apagan todas las luces y se cierra el programa. ¿Seguro?')) api('quit'); };
 
   // teclado
-  const holdKeys = { f: 'flash', s: 'strobe', h: 'humo' };
+  const holdKeys = { f: 'flash', s: 'strobe', a: 'strobe2', h: 'humo' };
   const isTyping = (e) => e.target.matches('input[type=text], input[type=number], textarea, select');
   document.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a' && !isTyping(e)) { e.preventDefault(); applyGroup('all'); return; }
     if (isTyping(e) || e.ctrlKey || e.metaKey || e.altKey) return;
     const k = e.key.toLowerCase();
     if (k === ' ') { e.preventDefault(); if (!e.repeat) api('go'); }
     else if (/^[1-9]$/.test(k)) { const s = S.scenes[+k - 1]; if (s) recall(s.id); }
     else if (k === 't' && !e.repeat) api('tap');
     else if (k === 'b' && !e.repeat) api('blackout', { on: !S.blackout });
-    else if (k === 'a') applyGroup('all');
     else if (k === 'escape') applyGroup('none');
     else if (holdKeys[k] && !e.repeat) api('hold', { kind: holdKeys[k], on: true });
   });
   document.addEventListener('keyup', (e) => { const k = e.key.toLowerCase(); if (holdKeys[k]) api('hold', { kind: holdKeys[k], on: false }); });
   // seguridad: si la ventana pierde el foco, se sueltan flash/strobo/humo
-  window.addEventListener('blur', () => { for (const k of ['flash', 'strobe', 'humo']) if (S && S.holds.includes(k)) api('hold', { kind: k, on: false }); });
+  window.addEventListener('blur', () => { for (const k of ['flash', 'strobe', 'strobe2', 'humo']) if (S && S.holds.includes(k)) api('hold', { kind: k, on: false }); });
 }
 
 function xyMove(e) {

@@ -7,26 +7,30 @@ import threading
 import time
 import uuid
 
-from . import frontal
+from . import efectos, frontal
 from .fixtures import (CONTINUOUS, PALETTE, apply_color, caps, default_look,
                        hex_to_rgb, nearest_slot, rgb_to_hex, rgbw_to_rgb)
 
 # ---------------------------------------------------------------- efectos ---
 FX_TYPES = {
     # tipo: (familia, nombre visible)
-    "pulso": ("dim", "Persecución"),
-    "onda": ("dim", "Onda"),
-    "azar": ("dim", "Aleatorio"),
-    "arcoiris": ("color", "Arcoíris"),
-    "colores": ("color", "Alternar colores"),
     "circulo": ("pos", "Círculo"),
     "ocho": ("pos", "Ocho"),
     "paneo": ("pos", "Paneo"),
     "tilt": ("pos", "Tilt"),
 }
+# intensidad y color (módulo efectos)
+for _k, (_fam, _n, _need) in efectos.TYPES.items():
+    FX_TYPES[_k] = (_fam, _n)
 # movimientos frontales (cabezales mirando al público)
 for _k, _n in frontal.SHAPES.items():
     FX_TYPES["f_" + _k] = ("pos", _n)
+
+# Strobo 2: strobo por software, al tempo o a velocidad libre
+STROBE2_DEFAULT = {"sync": True, "div": 2, "hz": 6.0, "white": False}
+STROBE2_DIVS = (0.5, 1, 2, 4)        # destellos por tiempo
+STROBE2_MAX_HZ = 12.0                 # con ~30 cuadros/s, más rápido se pierde
+MAX_MOVES = 4                         # movimientos sumados como máximo
 
 RIG_DEFAULT = {"front": {}, "span_x": 60.0, "span_y": 35.0, "flip_x": False, "flip_y": False,
                "reverse_order": False, "calibrated": False}
@@ -82,6 +86,9 @@ class Engine:
             st = show.setdefault("settings", {})
             st.setdefault("fade", 1.0)
             st.setdefault("cue_loop", False)
+            st.setdefault("strobe2", {})
+            for k, v in STROBE2_DEFAULT.items():
+                st["strobe2"].setdefault(k, v)
             self.show = show
             self.rig()
             self._undo = None
@@ -441,7 +448,7 @@ class Engine:
                 keep.append(fx)
         self.fx = keep
 
-    def add_fx(self, ids, ftype, params=None):
+    def add_fx(self, ids, ftype, params=None, stack=False):
         if ftype not in FX_TYPES:
             raise ValueError("Efecto desconocido")
         with self.lock:
@@ -450,12 +457,20 @@ class Engine:
             if fam == "pos":
                 ids = [i for i in ids if "pan" in self.look.get(i, {}) or "tilt" in self.look.get(i, {})]
             elif fam == "color":
-                ids = [i for i in ids if {"r", "cw", "w"} & set(self.look.get(i, {}))]
+                need = efectos.TYPES.get(ftype, ("", "", "color"))[2]
+                keys = {"r"} if need == "rgb" else {"r", "cw", "w"}
+                ids = [i for i in ids if keys & set(self.look.get(i, {}))]
             else:
                 ids = [i for i in ids if "dim" in self.look.get(i, {})]
             if not ids:
                 raise ValueError("Ningún equipo seleccionado admite ese efecto")
-            self._drop_fx(ids, fam)
+            if stack and fam == "pos":
+                # se suma a los movimientos que ya tienen (hasta MAX_MOVES)
+                moves = [f for f in self.fx if FX_TYPES.get(f["type"], ("",))[0] == "pos" and set(f["ids"]) & set(ids)]
+                if len(moves) >= MAX_MOVES:
+                    raise ValueError("Ya hay %d movimientos sumados: frená alguno antes" % MAX_MOVES)
+            else:
+                self._drop_fx(ids, fam)
             fx = {"id": new_id("fx"), "type": ftype, "ids": ids, "sync": True, "beats": 4,
                   "hz": 0.5, "size": 0.5, "spread": 1.0, "reverse": False,
                   "colors": ["#ff2020", "#2a46ff"]}
@@ -533,43 +548,36 @@ class Engine:
                     pan, tilt = self.xy_to_pt(fid, bx + dx, by + dy)
                     cur[fid]["pan"], cur[fid]["tilt"] = pan, tilt
                 continue
+            if t in efectos.TYPES:
+                for k, fid in enumerate(fx["ids"]):
+                    v = cur.get(fid)
+                    if v is None:
+                        continue
+                    d, rgb = efectos.fx_eval(fx, k, len(fx["ids"]), ph, fx["id"] + fid)
+                    if d is not None and "dim" in v:
+                        v["dim"] *= d
+                    if rgb is not None:
+                        # blanco puro: usar el LED blanco del equipo si lo tiene
+                        rgbw = (0.0, 0.0, 0.0, 1.0) if min(rgb) >= 0.999 else (rgb[0], rgb[1], rgb[2], 0.0)
+                        apply_color(self.profile_of(fid), v, rgbw)
+                continue
             for k, fid in enumerate(ids):
                 v = cur[fid]
                 p = ph - spread * k / n
-                if t == "pulso":
-                    if "dim" in v:
-                        v["dim"] *= 1.0 if frac(p) < max(size, 0.02) else 0.0
-                elif t == "onda":
-                    w = 0.5 + 0.5 * math.cos(2 * math.pi * p)
-                    if "dim" in v:
-                        v["dim"] *= (1 - size) + size * w
-                elif t == "azar":
-                    cycle = math.floor(ph)
-                    rnd = random.Random(hash((fx["id"], fid, cycle))).random()
-                    if "dim" in v:
-                        v["dim"] *= 1.0 if rnd < size else 0.0
-                elif t in ("arcoiris", "colores"):
-                    if t == "arcoiris":
-                        rgb = colorsys.hsv_to_rgb(frac(p), 1.0, 1.0)
-                    else:
-                        cols = fx.get("colors") or ["#ffffff"]
-                        rgb = hex_to_rgb(cols[int(frac(p) * len(cols)) % len(cols)])
-                    prof = self.profile_of(fid)
-                    apply_color(prof, v, (rgb[0], rgb[1], rgb[2], 0.0))
+                # movimientos viejos (escenas guardadas antes de los frontales)
+                ap, at = 0.12 * size, 0.22 * size
+                if t == "circulo":
+                    dp, dtl = ap * math.cos(2 * math.pi * p), at * math.sin(2 * math.pi * p)
+                elif t == "ocho":
+                    dp, dtl = ap * math.sin(2 * math.pi * p), at * 0.6 * math.sin(4 * math.pi * p)
+                elif t == "paneo":
+                    dp, dtl = ap * 1.6 * math.sin(2 * math.pi * p), 0.0
                 else:
-                    ap, at = 0.12 * size, 0.22 * size
-                    if t == "circulo":
-                        dp, dtl = ap * math.cos(2 * math.pi * p), at * math.sin(2 * math.pi * p)
-                    elif t == "ocho":
-                        dp, dtl = ap * math.sin(2 * math.pi * p), at * 0.6 * math.sin(4 * math.pi * p)
-                    elif t == "paneo":
-                        dp, dtl = ap * 1.6 * math.sin(2 * math.pi * p), 0.0
-                    else:
-                        dp, dtl = 0.0, at * math.sin(2 * math.pi * p)
-                    if "pan" in v:
-                        v["pan"] = clamp(v["pan"] + dp)
-                    if "tilt" in v:
-                        v["tilt"] = clamp(v["tilt"] + dtl)
+                    dp, dtl = 0.0, at * math.sin(2 * math.pi * p)
+                if "pan" in v:
+                    v["pan"] = clamp(v["pan"] + dp)
+                if "tilt" in v:
+                    v["tilt"] = clamp(v["tilt"] + dtl)
         for k in list(self.fx_phase):
             if k not in live:
                 del self.fx_phase[k]
@@ -761,6 +769,34 @@ class Engine:
             (self.holds.add if on else self.holds.discard)(kind)
             self.changed()
 
+    def strobe2_rate(self):
+        st = self.show["settings"]["strobe2"]
+        if st.get("sync"):
+            return self.bpm / 60.0 * float(st.get("div", 2))
+        return float(st.get("hz", 6.0))
+
+    def _strobe2_on(self):
+        st = self.show["settings"]["strobe2"]
+        if st.get("sync"):  # pegado al pulso del tempo
+            ph = frac(self.beat_phase * float(st.get("div", 2)))
+        else:
+            ph = frac(time.monotonic() * float(st.get("hz", 6.0)))
+        return ph < 0.4
+
+    def set_strobe2(self, **kw):
+        with self.lock:
+            st = self.show["settings"]["strobe2"]
+            if "sync" in kw:
+                st["sync"] = bool(kw["sync"])
+            if "white" in kw:
+                st["white"] = bool(kw["white"])
+            if "div" in kw:
+                d = float(kw["div"])
+                st["div"] = min(STROBE2_DIVS, key=lambda x: abs(x - d))
+            if "hz" in kw:
+                st["hz"] = round(clamp(float(kw["hz"]), 0.5, STROBE2_MAX_HZ), 1)
+            self.changed()
+
     def tap(self):
         with self.lock:
             now = time.monotonic()
@@ -928,6 +964,13 @@ class Engine:
                         v["strobe"] = 1.0
                     else:
                         v["dim"] = 1.0 if soft_strobe_on else 0.0
+                if "strobe2" in self.holds and light:
+                    on = self._strobe2_on()
+                    v["dim"] = 1.0 if on else 0.0
+                    if "strobe" in v:
+                        v["strobe"] = 0.0  # lo maneja el programa, no el equipo
+                    if on and self.show["settings"]["strobe2"].get("white"):
+                        apply_color(prof, v, (0, 0, 0, 1))
                 if "humo" in self.holds and "smoke" in v:
                     v["smoke"] = 1.0
                 self._write(frame, f, prof, c, v)

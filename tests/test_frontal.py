@@ -138,3 +138,44 @@ def test_clear_deja_los_cabezales_al_frente():
     e.clear_all()
     for k, f in enumerate(CAB):
         assert abs(e.look[f]["pan"] - (0.3 + 0.1 * k)) < 1e-6 and abs(e.look[f]["tilt"] - 0.95) < 1e-6
+
+
+def test_sumar_movimientos():
+    e = make()
+    e.add_fx(CAB, "f_circulo", {"size": 0.3})
+    e.add_fx(CAB, "f_barrido", {"size": 0.5}, stack=True)
+    assert sorted(f["type"] for f in e.fx) == ["f_barrido", "f_circulo"]
+    # el recorrido sumado es más ancho que cualquiera de los dos solos
+    t = time.monotonic()
+    xs = []
+    for k in range(80):
+        e.tick(t + k * 0.05)
+        xs.append(e.preview[CAB[0]]["x"])
+    assert max(xs) - min(xs) > 1.0
+    # sin "sumar", reemplaza a los dos
+    e.add_fx(CAB, "f_ocho")
+    assert [f["type"] for f in e.fx] == ["f_ocho"]
+    for _ in range(3):
+        e.add_fx(CAB, "f_vertical", stack=True)
+    import pytest
+    with pytest.raises(ValueError):
+        e.add_fx(CAB, "f_circulo", stack=True)
+
+
+def test_strobo2_al_tempo_y_libre():
+    e = make()
+    pars = ["eq_par%d" % i for i in range(1, 9)]
+    e.set_color(pars, [1, 0, 0, 0])
+    e.set_bpm(120)
+    e.set_strobe2(sync=True, div=2)  # 4 destellos por segundo
+    e.set_hold("strobe2", True)
+    t = time.monotonic()
+    on = [e.tick(t + k * 0.01)[48] > 0 for k in range(200)]  # 2 segundos
+    flashes = sum(1 for a, b in zip(on, on[1:]) if b and not a)
+    assert 7 <= flashes <= 9, flashes
+    e.set_strobe2(sync=False, hz=50)  # se limita a 12 por segundo
+    assert e.show["settings"]["strobe2"]["hz"] == 12.0
+    e.set_strobe2(white=True)
+    f = e.tick(t + 5)
+    e.set_hold("strobe2", False)
+    assert e.tick(t + 6)[48] == 255  # al soltar vuelve a la normalidad

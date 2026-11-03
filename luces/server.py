@@ -8,7 +8,7 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
 
-from . import frontal
+from . import efectos, frontal
 from .dmx_output import create_output
 from .engine import FX_TYPES, Engine
 from .fixtures import CHANNEL_ATTRS, PALETTE, Library
@@ -116,6 +116,8 @@ class App:
             "palette": PALETTE,
             "fx_types": {k: {"family": v[0], "name": v[1]} for k, v in FX_TYPES.items()},
             "frontal": frontal.catalog(),
+            "efectos": efectos.catalog(),
+            "size_labels": efectos.SIZE_LABEL,
             "channel_attrs": CHANNEL_ATTRS,
             "shows": self.storage.list_shows(),
             "settings": self.storage.settings,
@@ -161,7 +163,7 @@ class App:
         elif cmd == "clear":
             e.clear(ids or None, float(c.get("fade", 0)))
         elif cmd == "add_fx":
-            return e.add_fx(ids, c["type"], c.get("params"))
+            return e.add_fx(ids, c["type"], c.get("params"), bool(c.get("stack")))
         elif cmd == "update_fx":
             e.update_fx(c["id"], c.get("params", {}))
         elif cmd == "remove_fx":
@@ -201,9 +203,11 @@ class App:
         elif cmd == "blackout":
             e.set_blackout(c["on"])
         elif cmd == "hold":
-            if c.get("kind") not in ("flash", "strobe", "humo"):
+            if c.get("kind") not in ("flash", "strobe", "strobe2", "humo"):
                 raise ValueError("Botón desconocido")
             e.set_hold(c["kind"], c["on"])
+        elif cmd == "strobe2_set":
+            e.set_strobe2(**{k: c[k] for k in ("sync", "div", "hz", "white") if k in c})
         elif cmd == "tap":
             e.tap()
         elif cmd == "bpm":

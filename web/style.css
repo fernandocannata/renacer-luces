@@ -529,3 +529,47 @@ a { color: var(--amber); }
   .mini-range { width: 84px; }
   #brand { font-size: 19px; }
 }
+
+/* ---------------------------------------------------------- Strobo 2 */
+.s2wrap { position: relative; display: inline-flex; }
+#holds #btnStrobe2 { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+#holds .s2cfg { padding: 12px 8px; border-top-left-radius: 0; border-bottom-left-radius: 0; border-left: 1px solid rgba(0, 0, 0, .45); }
+#btnStrobe2.held { animation: strobe .22s steps(2) infinite; }
+.s2pop {
+  position: absolute; right: 0; top: calc(100% + 8px); z-index: 40; width: 310px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  padding: 12px 14px; box-shadow: 0 14px 34px rgba(0, 0, 0, .65);
+}
+.s2pop h3 { margin: 0 0 6px; }
+.s2pop label.row { margin: 10px 0 4px; }
+#holds .s2pop button { padding: 5px 8px; font-size: 12.5px; }
+.s2pop .s2divs { gap: 4px; }
+.s2pop .slider { grid-template-columns: 72px 1fr 48px; }
+.s2pop .hint { margin: 8px 0 0; }
+
+/* ---------------------------------------------------------- efectos con vista previa */
+.fxpresets { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); }
+.fxpresets button {
+  display: flex; flex-direction: column; align-items: stretch; gap: 6px; padding: 7px 7px 9px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, .03), transparent), var(--panel);
+  border: 1px solid rgba(255, 255, 255, .05); font-size: 13px; text-align: center; line-height: 1.15;
+}
+.fxpresets button:hover { border-color: rgba(217, 165, 91, .5); background: var(--ctrl); }
+.fxpresets svg { width: 100%; height: 44px; border-radius: 4px; background: #0b090e; }
+.selkind { margin: -6px 0 12px; font-size: 12.5px; color: var(--amber); }
+#progTabs button[hidden] { display: none; }
+
+/* calibrador de ruedas */
+.wcal .wdial { margin: 8px 0 10px; flex-wrap: nowrap; }
+.wcal .wdial output { min-width: 36px; text-align: right; }
+.wcal .wnames { gap: 6px; }
+.wcal .wnames button { display: inline-flex; align-items: center; gap: 6px; }
+.chip { width: 13px; height: 13px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, .3); display: inline-block; flex: none; }
+.wchip {
+  display: inline-flex; align-items: center; gap: 6px; padding: 3px 4px 3px 9px; border-radius: 99px;
+  border: 1px solid var(--line); background: var(--panel); font-size: 13px; cursor: pointer;
+}
+.wchip b { font: 600 13px var(--num); color: var(--amber); }
+.wchip button { padding: 1px 6px; border-radius: 99px; }
+.wtext { margin-top: 10px; }
+.wtext summary { cursor: pointer; }

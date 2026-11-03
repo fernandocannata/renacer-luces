@@ -33,7 +33,24 @@
   <div id="holds">
     <button id="btnFlash" title="Mantener: todo blanco a full (tecla F)">Flash</button>
     <button id="btnStrobe" title="Mantener: todo en strobo (tecla S)">Strobo</button>
-    <button id="btnHumo" title="Mantener: dispara la máquina de humo (tecla H)">Humo</button>
+    <span class="s2wrap">
+      <button id="btnStrobe2" title="Mantener: strobo al ritmo que elijas (tecla A)">Strobo 2</button>
+      <button id="btnS2Cfg" class="s2cfg" title="Ajustar el ritmo del Strobo 2" aria-expanded="false" aria-controls="s2Pop">▾</button>
+      <div id="s2Pop" class="s2pop" hidden>
+        <h3>Ritmo del Strobo 2</h3>
+        <label class="row"><input type="radio" name="s2mode" value="sync"> Al tempo</label>
+        <div class="row s2divs">
+          <button class="small ghost" data-s2div="0.5">Cada 2 tiempos</button>
+          <button class="small ghost" data-s2div="1">1 por tiempo</button>
+          <button class="small ghost" data-s2div="2">2 por tiempo</button>
+          <button class="small ghost" data-s2div="4">4 por tiempo</button>
+        </div>
+        <label class="row"><input type="radio" name="s2mode" value="free"> Libre</label>
+        <div class="slider"><label for="s2hz">Velocidad</label><input type="range" id="s2hz" min="0.5" max="12" step="0.5"><output id="s2hzVal"></output></div>
+        <label class="row"><input type="checkbox" id="s2white"> Destellos en blanco</label>
+        <p class="hint" id="s2rate"></p>
+      </div>
+    </span>
     <button id="btnClear" title="Vuelve todo a cero, como recién abierto. Se puede deshacer.">Clear</button>
     <button id="btnBlackout" title="Apaga todo hasta que lo vuelvas a tocar (tecla B)">Blackout</button>
   </div>
@@ -63,6 +80,7 @@
         <button data-p="haz">Haz</button>
         <button data-p="fx">Efectos</button>
       </div>
+      <p class="selkind" id="selKind"></p>
       <div class="emptysel" id="noSel">Tocá uno o más equipos a la izquierda para programarlos. También podés elegir un grupo, como “Todos” o “Cabezales”.</div>
 
       <div class="ppanel on" data-p="color">
@@ -107,7 +125,7 @@
         <p class="hint">Elegí primero una posición y después un movimiento: cada cabezal se mueve alrededor de donde está. Podés cambiar de posición con el movimiento andando.</p>
         <h3>Posiciones</h3>
         <div class="layouts" id="layouts"></div>
-        <div class="colhead" style="margin-top:14px"><h3 style="margin:0">Movimientos</h3><button class="ghost small" id="btnMovStop">Frenar movimiento</button></div>
+        <div class="colhead" style="margin-top:14px"><h3 style="margin:0">Movimientos</h3><span class="row" style="gap:6px"><button class="ghost small" id="btnMovStack" aria-pressed="false" title="Prendido: cada movimiento nuevo se suma a los que ya andan (hasta 4)">Sumar movimientos</button><button class="ghost small" id="btnMovStop">Frenar movimiento</button></span></div>
         <div class="movgrid" id="movPresets"></div>
         <div id="movList"></div>
 
@@ -155,18 +173,11 @@
       </div>
 
       <div class="ppanel" data-p="fx">
-        <h3>Intensidad</h3>
-        <div class="fxgrid">
-          <button data-fx="pulso">Persecución<small>Uno por vez</small></button>
-          <button data-fx="onda">Onda<small>Sube y baja en ola</small></button>
-          <button data-fx="respirar">Respiración<small>Todos juntos, lento</small></button>
-          <button data-fx="azar">Aleatorio<small>Prende al azar</small></button>
-        </div>
-        <h3>Color</h3>
-        <div class="fxgrid">
-          <button data-fx="arcoiris">Arcoíris<small>Recorre los colores</small></button>
-          <button data-fx="colores">Alternar colores<small>Entre los que elijas</small></button>
-        </div>
+        <h3 id="fxDimTitle" style="margin-top:4px">Intensidad</h3>
+        <div class="fxpresets" id="fxDim"></div>
+        <h3 id="fxColTitle">Color</h3>
+        <div class="fxpresets" id="fxCol"></div>
+        <p class="hint" id="fxNone"></p>
         <p class="hint" style="margin-top:14px">Los movimientos de los cabezales están en la pestaña <a href="#" data-goto="mov">Movimientos</a>.</p>
         <div class="colhead" style="margin-top:18px"><h2>Efectos activos</h2><button class="ghost small" id="btnFxClearSel">Quitar efectos de la selección</button></div>
         <div id="fxList"></div>
@@ -300,9 +311,10 @@
             <dt><span class="kbd">Espacio</span></dt><dd>GO de la secuencia</dd>
             <dt><span class="kbd">1</span>…<span class="kbd">9</span></dt><dd>Escenas 1 a 9</dd>
             <dt><span class="kbd">T</span></dt><dd>Tap de tempo</dd>
-            <dt><span class="kbd">F</span> / <span class="kbd">S</span> / <span class="kbd">H</span></dt><dd>Flash, strobo y humo (mientras la mantenés apretada)</dd>
+            <dt><span class="kbd">F</span> / <span class="kbd">S</span> / <span class="kbd">A</span></dt><dd>Flash, strobo y Strobo 2 (mientras la mantenés apretada)</dd>
+            <dt><span class="kbd">H</span></dt><dd>Humo (mientras la mantenés apretada)</dd>
             <dt><span class="kbd">B</span></dt><dd>Blackout</dd>
-            <dt><span class="kbd">A</span></dt><dd>Seleccionar todos</dd>
+            <dt><span class="kbd">Ctrl</span> + <span class="kbd">A</span></dt><dd>Seleccionar todos</dd>
             <dt><span class="kbd">Esc</span></dt><dd>Deseleccionar</dd>
           </dl>
         </div>
