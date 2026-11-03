@@ -21,10 +21,14 @@ jobs:
       - name: Pruebas
         run: python -m pytest -q tests
 
+      - name: Número de compilación
+        shell: bash
+        run: printf '%s' "${{ github.run_number }}" > luces/BUILD
+
       - name: Armar el .exe
         run: >
           pyinstaller --noconfirm --onefile --noconsole --name RenacerLightShow --icon icono.ico
-          --add-data "web;web" --add-data "perfiles;perfiles"
+          --add-data "web;web" --add-data "perfiles;perfiles" --add-data "luces/BUILD;luces"
           --hidden-import serial.tools.list_ports
           renacer_luces.py
 

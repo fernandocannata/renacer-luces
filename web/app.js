@@ -623,6 +623,8 @@ function renderShow() {
 
 /* ------------------------------------------------------------ armado estático y eventos */
 function buildStatic() {
+  $('#appVersion').textContent = `Versión ${INIT.app.version} (compilación ${INIT.app.build || 'dev'})`;
+  $('#brand').title = $('#appVersion').textContent;
   $('#palette').innerHTML = INIT.palette.map((c, i) => `<button class="swatch" style="--sw:${c.hex}" data-pal="${i}"><span>${esc(c.nombre)}</span></button>`).join('');
 
   // pestañas

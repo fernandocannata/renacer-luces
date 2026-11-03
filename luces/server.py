@@ -15,7 +15,21 @@ from .fixtures import CHANNEL_ATTRS, PALETTE, Library
 from .storage import Storage, base_dir, default_show, safe_name
 
 APP_NAME = "Renacer LightShow"
-APP_VERSION = "0.2"
+APP_VERSION = "0.7"
+
+
+def _read_build():
+    """Número de compilación (lo escribe GitHub Actions al armar el .exe)."""
+    if os.environ.get("RENACER_BUILD"):
+        return os.environ["RENACER_BUILD"]
+    try:
+        with open(os.path.join(base_dir(), "luces", "BUILD"), encoding="utf-8-sig") as f:
+            return f.read().strip() or "dev"
+    except Exception:
+        return "dev"
+
+
+APP_BUILD = _read_build()
 
 
 def lan_ip():
@@ -39,6 +53,8 @@ class App:
         self.engine = Engine(self.library, show)
         self.output = create_output(output_kind or self.storage.settings.get("salida", "auto"),
                                     self.storage.settings.get("dmx_ritmo", "normal"))
+        # el primer cuadro ya sale con el estado real (no todo en cero: evita un salto al abrir)
+        self.output.set_frame(self.engine.tick())
         self.output.start()
         self.saved_version = self.engine.version
         self.last_save = time.monotonic()
@@ -95,7 +111,7 @@ class App:
     # ------------------------------------------------------ datos UI ---
     def init_payload(self):
         return {
-            "app": {"name": APP_NAME, "version": APP_VERSION},
+            "app": {"name": APP_NAME, "version": APP_VERSION, "build": APP_BUILD},
             "profiles": self.library.summary(),
             "palette": PALETTE,
             "fx_types": {k: {"family": v[0], "name": v[1]} for k, v in FX_TYPES.items()},
