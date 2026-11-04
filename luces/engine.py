@@ -77,6 +77,7 @@ class Engine:
         self.preview = {}
         self.frame = bytes(512)
         self._undo = None
+        self._refresh = {}  # equipos que no toman un valor hasta verlo cambiar
         self.load_show(show)
 
     # ------------------------------------------------------------ show ---
@@ -1007,6 +1008,8 @@ class Engine:
                 if "humo" in self.holds and "smoke" in v:
                     v["smoke"] = 1.0
                 self._write(frame, f, prof, c, v)
+                if prof.get("refresco"):
+                    self._refresh_channels(frame, f, prof, now)
                 pv = self._preview(prof, c, v)
                 if "pan" in v:
                     pv["x"], pv["y"] = (round(q, 3) for q in self.pt_to_xy(f["id"], v["pan"], v.get("tilt", 0.5)))
@@ -1016,6 +1019,35 @@ class Engine:
             self.frame = bytes(frame)
             self.preview = preview
             return self.frame
+
+    REFRESH_ATTRS = ("intensity", "red", "green", "blue", "white")
+    REFRESH_EVERY = 2.0    # segundos entre refrescos aunque no cambie nada
+    REFRESH_DELAY = 0.1    # el refresco llega 100 ms después de un cambio
+    REFRESH_LEN = 0.075    # dura ~75 ms: más de un cuadro de salida
+
+    def _refresh_channels(self, frame, f, prof, now):
+        """Algunos equipos (varios Nebula) siguen usando un valor viejo en un canal
+        hasta que lo ven cambiar. Cuando cambia algo, y cada tanto, se mueven sus
+        canales de color y dimmer 2 pasos (invisible) y se devuelven a su valor."""
+        addrs = [f["address"] - 1 + i for i, ch in enumerate(prof.get("canales", []))
+                 if ch.get("attr") in self.REFRESH_ATTRS and 0 <= f["address"] - 1 + i < 512]
+        if not addrs:
+            return
+        st = self._refresh.setdefault(f["id"], {"last": None, "at": None, "next": now + self.REFRESH_EVERY})
+        vals = tuple(frame[a] for a in addrs)
+        if vals != st["last"]:
+            # el valor nuevo sale tal cual; el refresco llega un instante después
+            st["last"] = vals
+            st["at"] = now + self.REFRESH_DELAY
+        elif st["at"] is None and now >= st["next"]:
+            st["at"] = now
+        if st["at"] is not None and now >= st["at"]:
+            if now < st["at"] + self.REFRESH_LEN:
+                for a in addrs:
+                    frame[a] = frame[a] + 2 if frame[a] <= 253 else frame[a] - 2
+            else:
+                st["at"] = None
+                st["next"] = now + self.REFRESH_EVERY
 
     @staticmethod
     def _slot_dmx(prof, key, idx):

@@ -15,6 +15,8 @@ CAB = ["eq_cab%d" % i for i in range(1, 5)]
 
 def make():
     lib = Library(os.path.join(ROOT, "perfiles"), tempfile.mkdtemp())
+    for prof in lib.profiles.values():
+        prof["refresco"] = False  # acá se prueba otra cosa
     e = Engine(lib, default_show())
     # cabezales colgados: cada uno con su propio pan "de frente", tilt cerca del tope
     for k, fid in enumerate(CAB):

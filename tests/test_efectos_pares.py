@@ -16,8 +16,11 @@ PAR = ["eq_par%d" % i for i in range(1, 9)]
 CAB = ["eq_cab%d" % i for i in range(1, 5)]
 
 
-def make():
-    e = Engine(Library(os.path.join(ROOT, "perfiles"), tempfile.mkdtemp()), default_show())
+def make(refresco=False):
+    lib = Library(os.path.join(ROOT, "perfiles"), tempfile.mkdtemp())
+    for prof in lib.profiles.values():
+        prof["refresco"] = prof.get("refresco", False) and refresco
+    e = Engine(lib, default_show())
     e.set_color(PAR, [0, 0, 1, 0])
     return e
 
@@ -91,3 +94,22 @@ def test_catalogo_con_vista_previa():
     for p in cat:
         assert len(p["grid"]) == 12 and len(p["grid"][0]) == 8
         assert p["needs"] in ("dim", "color", "rgb")
+
+
+def test_refresco_de_canales_en_nebula():
+    """El Nebula no toma un valor hasta verlo cambiar: el programa los mueve 2 pasos y vuelve."""
+    e = make(refresco=True)
+    assert e.lib.get("tecshow_nebula_quad14_8ch")["refresco"]
+    e.set_color(PAR, [1, 0, 0, 0])            # rojo puro: blanco en 0
+    t = time.monotonic()
+    frames = [e.tick(t + k * 0.025) for k in range(12)]
+    w = [f[52] for f in frames]                # canal 5 (blanco) del Par 1
+    r = [f[49] for f in frames]                # canal 2 (rojo)
+    assert w[0] == 0 and r[0] == 255           # primero sale el color tal cual
+    assert 2 in w and w[-1] == 0               # después el blanco se mueve y vuelve a 0
+    assert r[-1] == 255 and min(r) >= 253      # el rojo apenas se toca y vuelve a full
+    # cada 2 segundos se refresca aunque no cambie nada
+    later = [e.tick(t + 2.5 + k * 0.025)[52] for k in range(8)]
+    assert 2 in later and later[-1] == 0
+    # nunca toca función ni velocidad
+    assert all(e.tick(t + 5 + k * 0.025)[54] == 0 for k in range(10))

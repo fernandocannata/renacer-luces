@@ -14,6 +14,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 def make():
     lib = Library(os.path.join(ROOT, "perfiles"), tempfile.mkdtemp())
+    for prof in lib.profiles.values():
+        prof["refresco"] = False  # acá se prueba otra cosa
     return Engine(lib, default_show())
 
 

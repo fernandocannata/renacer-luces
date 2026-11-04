@@ -785,6 +785,8 @@ function buildProbar() {
      <label class="hint">Sin strobo <input type="number" min="0" max="255" value="${st.off}" data-st="off"></label>
      <label class="hint">Más lento <input type="number" min="0" max="255" value="${st.min}" data-st="min"></label>
      <label class="hint">Más rápido <input type="number" min="0" max="255" value="${st.max}" data-st="max"></label></div>`;
+  $('#profRefresh').checked = !!draft.refresco;
+  $('#refreshEdit').style.display = draft.canales.some((c) => ['intensity', 'red', 'green', 'blue', 'white'].includes(c.attr)) ? '' : 'none';
   const pr = draft.prism_rot;
   $('#prismEdit').style.display = attrs.has('prism') ? '' : 'none';
   $('#prismEdit').innerHTML = `<h2>Rotación del prisma</h2>
@@ -824,6 +826,7 @@ function parseWheel(text, withHex) {
 function collectDraft() {
   for (const t of $$('[data-wheel]')) draft[t.dataset.wheel] = parseWheel(t.value, t.dataset.wheel === 'color_wheel');
   for (const i of $$('[data-st]')) { draft.strobe = draft.strobe || {}; draft.strobe[i.dataset.st] = Math.max(0, Math.min(255, +i.value || 0)); }
+  if ($('#profRefresh')) { if ($('#profRefresh').checked) draft.refresco = true; else draft.refresco = false; }
   const prOn = $('[data-pr=on]');
   if (prOn && $('#prismEdit').style.display !== 'none') {
     if (prOn.checked) draft.prism_rot = { min: Math.max(0, Math.min(255, +$('[data-pr=min]').value || 0)), max: Math.max(0, Math.min(255, +$('[data-pr=max]').value || 255)) };

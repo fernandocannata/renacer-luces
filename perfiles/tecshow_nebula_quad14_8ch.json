@@ -44,5 +44,6 @@
     "min": 10,
     "max": 255
   },
-  "icono": "slim"
+  "icono": "slim",
+  "refresco": true
 }
