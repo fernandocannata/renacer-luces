@@ -22,5 +22,6 @@
     }
   ],
   "icono": "slim",
-  "refresco": true
+  "refresco": false,
+  "despertar": true
 }

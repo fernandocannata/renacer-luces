@@ -80,8 +80,12 @@ class App:
     def _loop(self):
         period = 1.0 / Engine.FRAME_HZ
         nxt = time.perf_counter()
+        was_connected = False
         while not self.stop_event.is_set():
             try:
+                if self.output.connected and not was_connected:
+                    self.engine.wake()  # al conectar la interfaz, despertar a los Nebula
+                was_connected = self.output.connected
                 self.output.set_frame(self.engine.tick())
                 if self.engine.version != self.saved_version and time.monotonic() - self.last_save > 2.0:
                     self.save_now()
@@ -170,6 +174,8 @@ class App:
             e.set_rig(**{k: c[k] for k in ("span_x", "span_y", "flip_x", "flip_y", "reverse_order") if k in c})
         elif cmd == "nudge":
             e.nudge(ids, c.get("pan", 0), c.get("tilt", 0))
+        elif cmd == "wake":
+            return e.wake(ids or None)
         elif cmd == "clear_all":
             e.clear_all()
         elif cmd == "undo_clear":

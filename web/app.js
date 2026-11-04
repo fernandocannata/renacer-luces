@@ -786,6 +786,7 @@ function buildProbar() {
      <label class="hint">Más lento <input type="number" min="0" max="255" value="${st.min}" data-st="min"></label>
      <label class="hint">Más rápido <input type="number" min="0" max="255" value="${st.max}" data-st="max"></label></div>`;
   $('#profRefresh').checked = !!draft.refresco;
+  $('#profWake').checked = !!draft.despertar;
   $('#refreshEdit').style.display = draft.canales.some((c) => ['intensity', 'red', 'green', 'blue', 'white'].includes(c.attr)) ? '' : 'none';
   const pr = draft.prism_rot;
   $('#prismEdit').style.display = attrs.has('prism') ? '' : 'none';
@@ -826,7 +827,8 @@ function parseWheel(text, withHex) {
 function collectDraft() {
   for (const t of $$('[data-wheel]')) draft[t.dataset.wheel] = parseWheel(t.value, t.dataset.wheel === 'color_wheel');
   for (const i of $$('[data-st]')) { draft.strobe = draft.strobe || {}; draft.strobe[i.dataset.st] = Math.max(0, Math.min(255, +i.value || 0)); }
-  if ($('#profRefresh')) { if ($('#profRefresh').checked) draft.refresco = true; else draft.refresco = false; }
+  if ($('#profRefresh')) draft.refresco = $('#profRefresh').checked;
+  if ($('#profWake')) draft.despertar = $('#profWake').checked;
   const prOn = $('[data-pr=on]');
   if (prOn && $('#prismEdit').style.display !== 'none') {
     if (prOn.checked) draft.prism_rot = { min: Math.max(0, Math.min(255, +$('[data-pr=min]').value || 0)), max: Math.max(0, Math.min(255, +$('[data-pr=max]').value || 255)) };
@@ -1298,6 +1300,11 @@ function buildStatic() {
   $('#btnNewMine').onclick = () => newShow('mi_equipo');
   $('#btnNewEmpty').onclick = () => newShow('vacio');
   $('#outKind').onchange = (e) => api('output_set', { kind: e.target.value });
+  $('#btnWakeAll').onclick = async () => {
+    const n = await api('wake');
+    toast(n ? `Despertando ${n} equipo${n > 1 ? 's' : ''} (tarda un segundo)` : 'Ningún equipo tiene activado “despertar”');
+  };
+  $('#btnWakeOne').onclick = () => draftFor && api('wake', { ids: [draftFor] }).then((n) => n !== null && toast('Despertando el equipo'));
   $('#outRate').onchange = (e) => api('output_set', { rate: e.target.value }).then((ok) => ok && toast('Ritmo de envío cambiado'));
   $('#btnReconnect').onclick = () => api('output_set', { kind: $('#outKind').value }).then((ok) => ok && toast('Reconectando la interfaz'));
   $('#remote').onchange = (e) => api('app_settings', { control_remoto: e.target.checked });

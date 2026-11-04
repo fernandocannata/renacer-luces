@@ -106,8 +106,11 @@ VT_GOBO_NAMES = {0: "Abierto", 12: "Círculo", 22: "Serpiente", 32: "Cruz", 42: 
 def migrate(pid, p):
     """Arreglos automáticos para perfiles guardados con valores viejos."""
     if "nebula" in pid.lower() or "Nebula" in str(p.get("nombre", "")):
-        # varios Nebula no toman un valor hasta verlo cambiar: refrescar sus canales
-        p.setdefault("refresco", True)
+        # varios Nebula arrancan con el blanco "colgado" hasta que el canal hace un
+        # recorrido grande: se los despierta al abrir. El refresco chiquito los hacía titilar.
+        p.setdefault("despertar", True)
+        if p.get("origen") != "usuario":
+            p["refresco"] = False
     if not pid.startswith("venetian_vt_b100") and "VT-B100" not in str(p.get("nombre", "")):
         return p
     if [g.get("dmx") for g in p.get("gobo", [])] == OLD_VT_GOBOS:

@@ -284,8 +284,12 @@
       <div class="box" id="strobeEdit"></div>
       <div class="box" id="prismEdit"></div>
       <div class="box" id="refreshEdit">
-        <label class="row"><input type="checkbox" id="profRefresh"> Refrescar los canales de color y dimmer</label>
-        <p class="hint">Para equipos que no toman un valor hasta verlo cambiar (por ejemplo, queda blanco mezclado aunque el blanco esté en 0). El programa los mueve 2 pasos cada tanto y los devuelve: no se nota a la vista.</p>
+        <h2>Equipos que se quedan con un color viejo</h2>
+        <label class="row" style="margin-top:8px"><input type="checkbox" id="profWake"> Despertarlos al conectar la interfaz</label>
+        <p class="hint">Al abrir el programa, les sube y baja de a un canal (dimmer, rojo, verde, azul, blanco) con el dimmer en cero. Sirve para equipos que arrancan con un color "colgado" (por ejemplo, blanco mezclado) hasta que el canal se mueve.</p>
+        <div class="row"><button class="ghost small" id="btnWakeOne">Despertar este equipo ahora</button></div>
+        <label class="row" style="margin-top:12px"><input type="checkbox" id="profRefresh"> Además, refrescar los canales cada 2 segundos</label>
+        <p class="hint">Mueve los canales 2 pasos y los devuelve. Dejalo apagado si el equipo titila.</p>
       </div>
       <div class="row" style="margin-top:12px">
         <button id="btnSaveProfile">Guardar perfil</button>
@@ -337,6 +341,7 @@
               <option value="sim">Simulador, sin interfaz</option>
             </select>
             <button class="ghost" id="btnReconnect">Reconectar</button>
+            <button class="ghost" id="btnWakeAll" title="Para los equipos que se quedan con un color viejo (por ejemplo, después de apagarlos y prenderlos)">Despertar equipos</button>
           </div>
           <div class="row" style="margin-top:8px">
             <label class="hint" for="outRate">Ritmo de envío</label>

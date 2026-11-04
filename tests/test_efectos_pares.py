@@ -96,20 +96,31 @@ def test_catalogo_con_vista_previa():
         assert p["needs"] in ("dim", "color", "rgb")
 
 
-def test_refresco_de_canales_en_nebula():
-    """El Nebula no toma un valor hasta verlo cambiar: el programa los mueve 2 pasos y vuelve."""
+def test_refresco_de_canales_opcional():
+    """El refresco chiquito existe como opción, pero en los Nebula viene apagado (los hacía titilar)."""
     e = make(refresco=True)
-    assert e.lib.get("tecshow_nebula_quad14_8ch")["refresco"]
-    e.set_color(PAR, [1, 0, 0, 0])            # rojo puro: blanco en 0
+    assert not e.lib.get("tecshow_nebula_quad14_8ch")["refresco"]
+    e.lib.get("tecshow_nebula_quad14_8ch")["refresco"] = True
+    e.set_color(PAR, [1, 0, 0, 0])
     t = time.monotonic()
-    frames = [e.tick(t + k * 0.025) for k in range(12)]
-    w = [f[52] for f in frames]                # canal 5 (blanco) del Par 1
-    r = [f[49] for f in frames]                # canal 2 (rojo)
-    assert w[0] == 0 and r[0] == 255           # primero sale el color tal cual
-    assert 2 in w and w[-1] == 0               # después el blanco se mueve y vuelve a 0
-    assert r[-1] == 255 and min(r) >= 253      # el rojo apenas se toca y vuelve a full
-    # cada 2 segundos se refresca aunque no cambie nada
-    later = [e.tick(t + 2.5 + k * 0.025)[52] for k in range(8)]
-    assert 2 in later and later[-1] == 0
-    # nunca toca función ni velocidad
-    assert all(e.tick(t + 5 + k * 0.025)[54] == 0 for k in range(10))
+    w = [e.tick(t + k * 0.025)[52] for k in range(12)]
+    assert w[0] == 0 and 2 in w and w[-1] == 0
+
+
+def test_despertar_sube_y_baja_de_a_un_canal():
+    e = make()
+    assert e.lib.get("tecshow_nebula_quad14_8ch")["despertar"]
+    e.set_color(PAR, [1, 0.8, 0, 0])               # amarillo
+    t0 = time.monotonic()
+    assert e.wake() == 8                            # los 8 pares del show de ejemplo
+    seen = []
+    for k in range(int(1.6 / 0.03)):
+        f = e.tick(t0 + k * 0.03)
+        seen.append(tuple(f[48:53]))                # dim, R, G, B, W del Par 1
+    ws = [s[4] for s in seen]
+    assert 255 in ws                                # el blanco hace el recorrido grande…
+    assert all(s[0] == 0 for s in seen if s[4] == 255)   # …con el dimmer en cero
+    # nunca dos colores arriba a la vez
+    assert all(sum(1 for v in s[1:] if v == 255) <= 1 for s in seen[:40])
+    assert seen[-1] == (255, 255, 204, 0, 0)        # y al final queda el amarillo real
+    assert not e._wake

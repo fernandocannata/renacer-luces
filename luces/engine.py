@@ -78,6 +78,7 @@ class Engine:
         self.frame = bytes(512)
         self._undo = None
         self._refresh = {}  # equipos que no toman un valor hasta verlo cambiar
+        self._wake = {}     # equipos "despertándose": id -> momento de inicio
         self.load_show(show)
 
     # ------------------------------------------------------------ show ---
@@ -1010,6 +1011,8 @@ class Engine:
                 self._write(frame, f, prof, c, v)
                 if prof.get("refresco"):
                     self._refresh_channels(frame, f, prof, now)
+                if f["id"] in self._wake:
+                    self._wake_channels(frame, f, prof, now)
                 pv = self._preview(prof, c, v)
                 if "pan" in v:
                     pv["x"], pv["y"] = (round(q, 3) for q in self.pt_to_xy(f["id"], v["pan"], v.get("tilt", 0.5)))
@@ -1048,6 +1051,51 @@ class Engine:
             else:
                 st["at"] = None
                 st["next"] = now + self.REFRESH_EVERY
+
+    WAKE_STEP = 0.12  # cada paso del "despertar" (más de 3 cuadros de salida)
+
+    def wake(self, ids=None):
+        """Sube y baja de a un canal (dimmer, R, G, B, W) a los equipos con "despertar",
+        con el dimmer en cero. Algunos Nebula no sueltan un valor viejo (por ejemplo el
+        blanco prendido al encenderlos) hasta que el canal hace ese recorrido."""
+        with self.lock:
+            now = time.monotonic()
+            for f in self.show["fixtures"]:
+                prof = self.lib.get(f["profile"]) or {}
+                if (ids is None and prof.get("despertar")) or (ids is not None and f["id"] in ids):
+                    self._wake[f["id"]] = now
+            self.changed()
+            return len(self._wake)
+
+    def _wake_steps(self, prof):
+        idx = {ch.get("attr"): i for i, ch in enumerate(prof.get("canales", []))
+               if ch.get("attr") in self.REFRESH_ATTRS}
+        dim = idx.get("intensity")
+        steps = []  # cada paso: {índice de canal: valor}; el resto queda como esté
+        hold = {idx[a]: 0 for a in ("red", "green", "blue", "white") if a in idx}
+        if dim is not None:
+            hold[dim] = 0
+        steps.append(dict(hold))
+        for a in ("red", "green", "blue", "white"):
+            if a in idx:
+                steps.append({**hold, idx[a]: 255})
+                steps.append({**hold, idx[a]: 0})
+        if dim is not None:
+            colors0 = {idx[a]: 0 for a in ("red", "green", "blue", "white") if a in idx}
+            steps.append({**colors0, dim: 255})
+            steps.append({**colors0, dim: 0})
+        return steps
+
+    def _wake_channels(self, frame, f, prof, now):
+        steps = self._wake_steps(prof)
+        k = int((now - self._wake[f["id"]]) / self.WAKE_STEP)
+        if k >= len(steps):
+            del self._wake[f["id"]]
+            return
+        for i, val in steps[k].items():
+            a = f["address"] - 1 + i
+            if 0 <= a < 512:
+                frame[a] = val
 
     @staticmethod
     def _slot_dmx(prof, key, idx):
