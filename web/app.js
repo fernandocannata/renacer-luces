@@ -846,8 +846,10 @@ function renderShow() {
     setVal($('#outKind'), S.app_settings.salida || 'auto');
     setVal($('#outRate'), S.app_settings.dmx_ritmo || 'normal');
     setVal($('#remote'), S.app_settings.control_remoto);
+    const port = S.app_settings.puerto || 8731;
+    const addrs = (INIT.lan_ips || []).map((ip) => `${ip}:${port}`);
     $('#remoteHint').textContent = S.app_settings.control_remoto
-      ? `Activado. Si recién lo prendiste, cerrá y volvé a abrir el programa. Después, en el celular (misma Wi-Fi) abrí ${INIT.lan}`
+      ? `Activado. Abrí la app "LightShow Remoto" en el celular, conectado a la misma Wi-Fi: encuentra esta PC sola. Si no la encuentra, escribí ${addrs.length ? addrs.join(' o ') : INIT.lan.replace('http://', '')}. La primera vez, si Windows pregunta, tocá "Permitir acceso".`
       : 'Desactivado: solo se puede controlar desde esta computadora.';
   }
   if (S.shows && changed('shows', [S.shows.map((s) => s.name), S.show_name])) {

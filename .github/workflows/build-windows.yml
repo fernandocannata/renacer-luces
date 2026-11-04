@@ -3,6 +3,7 @@ name: Armar RenacerLightShow.exe
 on:
   push:
     branches: [main]
+    paths-ignore: ["android/**", ".github/workflows/build-android.yml"]
   workflow_dispatch:
 
 jobs:

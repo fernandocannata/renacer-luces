@@ -115,7 +115,8 @@ def main():
     if port_busy(port):
         print("El puerto %d está ocupado por otro programa." % port)
     app = App(output_kind="sim" if args.sim else None)
-    host = "0.0.0.0" if app.storage.settings.get("control_remoto") else "127.0.0.1"
+    # escucha en la red siempre; otros equipos solo entran si está permitido (Show y ajustes)
+    host = "0.0.0.0"
     print("%s funcionando en %s  (Ctrl+C para salir)" % (APP_NAME, url))
     print("Salida DMX:", app.output.status()["label"])
     if not args.sin_ventana:

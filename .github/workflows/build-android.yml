@@ -1,0 +1,48 @@
+name: Armar LightShowRemoto.apk
+
+on:
+  push:
+    branches: [main]
+    paths: ["android/**", ".github/workflows/build-android.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.7"
+
+      - name: Compilar
+        run: gradle assembleRelease --no-daemon --stacktrace
+
+      - name: Preparar APK
+        run: cp app/build/outputs/apk/release/app-release.apk LightShowRemoto.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LightShowRemoto-apk
+          path: android/LightShowRemoto.apk
+
+      - name: Publicar versión para descargar
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "android-${{ github.run_number }}" LightShowRemoto.apk \
+            --title "LightShow Remoto (Android) ${{ github.run_number }}" \
+            --notes "Descargá LightShowRemoto.apk desde el celular y abrilo para instalar." \
+            --latest=false

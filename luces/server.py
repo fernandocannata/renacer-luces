@@ -11,12 +11,56 @@ from urllib.parse import urlparse
 from . import efectos, frontal
 from .dmx_output import create_output
 from .os2l import OS2LServer
+
+DISCOVERY_PORT = 8733
+DISCOVERY_ASK = b"RENACER_LIGHTSHOW?"
+
+
+class Discovery:
+    """Responde por la red a la app del celular que busca la PC."""
+
+    def __init__(self, app):
+        self.app = app
+        self._stop = threading.Event()
+
+    def start(self):
+        threading.Thread(target=self._run, name="descubrimiento", daemon=True).start()
+
+    def stop(self):
+        self._stop.set()
+
+    def _run(self):
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            s.bind(("", DISCOVERY_PORT))
+            s.settimeout(1.0)
+        except OSError as e:
+            print("Búsqueda desde el celular no disponible:", e)
+            return
+        while not self._stop.is_set():
+            try:
+                data, addr = s.recvfrom(512)
+            except socket.timeout:
+                continue
+            except OSError:
+                break
+            if data.strip() != DISCOVERY_ASK or not self.app.storage.settings.get("control_remoto"):
+                continue
+            reply = {"app": APP_NAME, "version": APP_VERSION, "pc": socket.gethostname(),
+                     "port": int(self.app.storage.settings.get("puerto", 8731)),
+                     "show": self.app.engine.show.get("name", "")}
+            try:
+                s.sendto(json.dumps(reply, ensure_ascii=False).encode("utf-8"), addr)
+            except OSError:
+                pass
+        s.close()
 from .engine import FX_TYPES, Engine
 from .fixtures import CHANNEL_ATTRS, PALETTE, Library
 from .storage import Storage, base_dir, default_show, safe_name
 
 APP_NAME = "Renacer LightShow"
-APP_VERSION = "0.7"
+APP_VERSION = "0.8"
 
 
 def _read_build():
@@ -31,6 +75,34 @@ def _read_build():
 
 
 APP_BUILD = _read_build()
+
+
+# Lo que puede hacer el celular: manejar el show, no configurar ni borrar nada
+REMOTE_COMMANDS = {
+    "set_attrs", "set_color", "set_wheel", "set_position", "set_positions", "fan", "locate", "clear",
+    "add_fx", "update_fx", "remove_fx", "recall_scene", "recall_position", "front_layout",
+    "go", "back", "stop_cues", "master", "blackout", "hold", "tap", "bpm", "sync_set", "strobe2_set",
+    "clear_all", "undo_clear", "wake",
+}
+
+
+REMOTE_ASSETS = {"/", "/remoto", "/remoto.html", "/remoto.css", "/remoto.js", "/favicon.png", "/icono.png"}
+
+
+def is_local(ip):
+    return ip.startswith("127.") or ip in ("::1", "localhost")
+
+
+def lan_ips():
+    """Direcciones de esta PC en la red (para mostrarlas y para el celular)."""
+    ips = set()
+    try:
+        for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
+            ips.add(info[4][0])
+    except OSError:
+        pass
+    ips.add(lan_ip())
+    return sorted(ip for ip in ips if not ip.startswith("127."))
 
 
 def lan_ip():
@@ -61,6 +133,8 @@ class App:
         self.engine.sync_ext = bool(self.storage.settings.get("os2l_sync"))
         self.os2l = OS2LServer(self._on_os2l, self.storage.settings.get("os2l_puerto", 9996))
         self.os2l.start()
+        self.discovery = Discovery(self)
+        self.discovery.start()
         self.saved_version = self.engine.version
         self.last_save = time.monotonic()
         self.stop_event = threading.Event()
@@ -125,6 +199,7 @@ class App:
         self.save_now()
         self.stop_event.set()
         self.os2l.stop()
+        self.discovery.stop()
         self.output.stop()
         if self.server:
             threading.Thread(target=self.server.shutdown, daemon=True).start()
@@ -142,7 +217,8 @@ class App:
             "channel_attrs": CHANNEL_ATTRS,
             "shows": self.storage.list_shows(),
             "settings": self.storage.settings,
-            "lan": "http://%s:%s" % (lan_ip(), self.storage.settings.get("puerto", 8730)),
+            "lan": "http://%s:%s" % (lan_ip(), self.storage.settings.get("puerto", 8731)),
+            "lan_ips": lan_ips(),
             "data_dir": self.storage.dir,
             "output": self.output.status(),
             "sync": self.sync_status(),
@@ -353,8 +429,23 @@ def make_handler(app):
             self.end_headers()
             self.wfile.write(body)
 
+        def _remote_ok(self, cmd=None):
+            """El celular entra solo si está permitido, y solo para manejar el show."""
+            if is_local(self.client_address[0]):
+                return True
+            if not app.storage.settings.get("control_remoto"):
+                self._send(403, {"ok": False, "error": "El control desde el celular está apagado. Activalo en la PC: Show y ajustes."})
+                return False
+            if cmd is not None and cmd not in REMOTE_COMMANDS:
+                self._send(200, {"ok": False, "error": "Eso se hace desde la PC."})
+                return False
+            return True
+
         def do_GET(self):
             path = urlparse(self.path).path
+            # la página del celular carga siempre; sola se conecta cuando se habilita en la PC
+            if not (path in REMOTE_ASSETS and not is_local(self.client_address[0])) and not self._remote_ok():
+                return
             if path == "/events":
                 return self._events()
             if path == "/api/init":
@@ -362,7 +453,9 @@ def make_handler(app):
             if path == "/api/profiles":
                 return self._send(200, app.library.summary())
             if path == "/":
-                path = "/index.html"
+                path = "/index.html" if is_local(self.client_address[0]) else "/remoto.html"
+            if path == "/remoto":
+                path = "/remoto.html"
             rel = os.path.normpath(path.lstrip("/"))
             full = os.path.join(app.web_dir, rel)
             if rel.startswith("..") or not os.path.isfile(full):
@@ -379,6 +472,8 @@ def make_handler(app):
             try:
                 n = int(self.headers.get("Content-Length", 0))
                 c = json.loads(self.rfile.read(n) or b"{}")
+                if not self._remote_ok(c.get("cmd")):
+                    return
                 res = app.command(c)
                 self._send(200, {"ok": True, "result": res})
             except Exception as ex:

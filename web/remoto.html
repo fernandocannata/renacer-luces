@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#0f0c13">
+<title>LightShow Remoto</title>
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="stylesheet" href="remoto.css">
+</head>
+<body>
+
+<div class="top">
+<header class="rbar">
+  <span class="conn" id="conn" title="Conexión con la PC"></span>
+  <div class="tempo">
+    <span id="beat"></span><b id="bpm">120</b>
+    <button id="tap">Tap</button>
+    <button id="vdj" class="vdj" aria-pressed="false"><span class="sdot"></span>VDJ</button>
+  </div>
+  <button id="bo" class="bo">Blackout</button>
+</header>
+
+<div class="holds">
+  <button data-hold="flash">Flash</button>
+  <button data-hold="strobe">Strobo</button>
+  <button data-hold="strobe2">Strobo 2</button>
+  <button id="clr" class="clr">Clear</button>
+</div>
+</div>
+
+<div class="master"><label for="master">Master</label><input type="range" id="master" min="0" max="1" step="0.01"><output id="masterVal">100%</output></div>
+
+<main>
+  <section data-tab="esc" class="on">
+    <div class="standby" id="standby"><span class="lamp"></span><span id="nextCue">Sin pasos en la secuencia</span></div>
+    <button id="go" class="go">GO</button>
+    <div class="row2"><button id="back">Atrás</button><button id="stop">Parar</button></div>
+    <h2>Escenas</h2>
+    <div class="grid scenes" id="scenes"></div>
+  </section>
+
+  <section data-tab="fx">
+    <div class="chips" data-groups></div>
+    <h2 id="fxDimT">Intensidad</h2>
+    <div class="grid presets" id="fxDim"></div>
+    <h2 id="fxColT">Color</h2>
+    <div class="grid presets" id="fxCol"></div>
+    <p class="hint" id="fxNone"></p>
+    <h2>En marcha</h2>
+    <div id="fxActive"></div>
+  </section>
+
+  <section data-tab="mov">
+    <p class="hint" id="movHint"></p>
+    <h2>Posiciones</h2>
+    <div class="grid layouts" id="layouts"></div>
+    <div class="row2 tight"><button id="stack" aria-pressed="false">Sumar movimientos</button><button id="movStop">Frenar movimiento</button></div>
+    <h2>Movimientos</h2>
+    <div class="grid presets" id="moves"></div>
+    <h2>En marcha</h2>
+    <div id="movActive"></div>
+  </section>
+
+  <section data-tab="col">
+    <div class="chips" data-groups></div>
+    <div class="dimrow"><label for="dim">Intensidad</label><input type="range" id="dim" min="0" max="1" step="0.01"><output id="dimVal">0%</output></div>
+    <div class="row4"><button data-dim="0">0</button><button data-dim="0.5">50</button><button data-dim="1">Full</button><button id="off">Apagar</button></div>
+    <div id="palBox"><h2>Color</h2><div class="grid swatches" id="palette"></div></div>
+    <div id="wheelBox"><h2>Colores de la rueda</h2><div class="grid swatches" id="wheel"></div></div>
+    <div id="mineBox"><h2>Mis colores</h2><div class="grid swatches" id="mine"></div></div>
+  </section>
+</main>
+
+<nav class="tabs">
+  <button data-go="esc" class="on">Escenas</button>
+  <button data-go="fx">Efectos</button>
+  <button data-go="mov">Movimientos</button>
+  <button data-go="col">Color</button>
+</nav>
+
+<div id="toast"></div>
+<div id="lost"><div>
+  <h2>Sin conexión con la PC</h2>
+  <p class="hint" id="lostMsg">Reintentando…</p>
+  <button id="changePc" hidden>Buscar otra PC</button>
+</div></div>
+<script src="remoto.js"></script>
+</body>
+</html>
