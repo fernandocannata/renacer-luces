@@ -1067,9 +1067,15 @@ class Engine:
             elif a == "gobo":
                 val = self._slot_dmx(prof, "gobo", v.get("gobo", 0))
             elif a == "prism":
-                val = self._slot_dmx(prof, "prism", v.get("prism", 0))
+                pr = prof.get("prism_rot")
+                if pr and v.get("prot", 0) > 0.001:
+                    # rotación dentro del mismo canal: de lento (min) a rápido (max)
+                    lo, hi = float(pr.get("min", 145)), float(pr.get("max", 255))
+                    val = lo + v["prot"] * (hi - lo)
+                else:
+                    val = self._slot_dmx(prof, "prism", v.get("prism", 0))
             elif a == "prism_rotation":
-                val = v.get("prot", 0) * 255
+                val = 0 if prof.get("prism_rot") else v.get("prot", 0) * 255
             elif a == "focus":
                 val = v.get("focus", 0.5) * 255
             elif a == "smoke":

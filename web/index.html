@@ -207,7 +207,7 @@
   <!-- ======================================================== PATCH -->
   <section id="patch" class="view">
     <div class="page">
-      <p class="hint">Cada equipo escucha a partir de su dirección DMX. Tiene que coincidir con la que configuraste en el display del equipo (por ejemplo d001).</p>
+      <p class="hint">Cada equipo escucha a partir de su dirección DMX. Tiene que coincidir con la que configuraste en el display del equipo (por ejemplo d001), y el equipo tiene que estar en el mismo modo de canales que su perfil (por ejemplo 12CH). Si el equipo usa más canales que el perfil, sus últimos canales se pisan con el equipo de al lado: es una causa típica de reseteos solos.</p>
       <div id="conflicts"></div>
       <table>
         <thead><tr><th></th><th>Nombre</th><th>Tipo</th><th>Dirección</th><th>Canales</th><th>Invertir</th><th></th></tr></thead>
@@ -240,6 +240,7 @@
       <div id="chRows"></div>
       <div class="grid2" id="wheelEditors"></div>
       <div class="box" id="strobeEdit"></div>
+      <div class="box" id="prismEdit"></div>
       <div class="row" style="margin-top:12px">
         <button id="btnSaveProfile">Guardar perfil</button>
         <input type="text" id="newProfileName" placeholder="Nombre para guardarlo como perfil nuevo">

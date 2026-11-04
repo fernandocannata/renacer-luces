@@ -371,7 +371,7 @@ function renderProgrammer() {
   for (const [id, cap, key] of [['prot', 'prot', 'prot'], ['focus', 'focus', 'focus'], ['strobe', 'strobe', 'strobe']]) {
     const v = firstVal(cap, key);
     setVal($('#' + id), v ?? 0);
-    $('#' + id + 'Val').textContent = v == null ? '—' : (id === 'strobe' && v < 0.005 ? 'no' : pct(v));
+    $('#' + id + 'Val').textContent = v == null ? '—' : (id === 'strobe' && v < 0.005 ? 'no' : id === 'prot' && v < 0.005 ? 'quieto' : pct(v));
   }
   drawXYPoints();
 }
@@ -665,7 +665,7 @@ function buildProbar() {
       <h2>${title}: encontrar cada posición</h2>
       <ol class="steps">
         <li><button class="small" data-wlight>Prender el equipo para ver</button></li>
-        <li>Mové la rueda hasta que ${key === 'color_wheel' ? 'el color se vea entero, sin partirse' : 'la posición quede centrada'}.</li>
+        <li>Mové la rueda hasta que ${key === 'color_wheel' ? 'el color se vea entero, sin partirse' : key === 'gobo' ? 'el gobo quede quieto y centrado (si tiembla, estás en la zona de "gobo que se sacude": probá un valor más bajo)' : 'la posición quede centrada'}.</li>
         <li>Tocá ${key === 'color_wheel' ? 'el nombre del color que ves' : 'el botón para anotarla'}. Repetí con todas y al final tocá <b>Guardar perfil</b>.</li>
       </ol>
       <div class="row wdial">
@@ -691,6 +691,14 @@ function buildProbar() {
      <label class="hint">Sin strobo <input type="number" min="0" max="255" value="${st.off}" data-st="off"></label>
      <label class="hint">Más lento <input type="number" min="0" max="255" value="${st.min}" data-st="min"></label>
      <label class="hint">Más rápido <input type="number" min="0" max="255" value="${st.max}" data-st="max"></label></div>`;
+  const pr = draft.prism_rot;
+  $('#prismEdit').style.display = attrs.has('prism') ? '' : 'none';
+  $('#prismEdit').innerHTML = `<h2>Rotación del prisma</h2>
+     <label class="row" style="margin-top:8px"><input type="checkbox" data-pr="on" ${pr ? 'checked' : ''}> La rotación está en el mismo canal del prisma</label>
+     <div class="row" style="margin-top:8px">
+       <label class="hint">Desde (lento) <input type="number" min="0" max="255" value="${pr ? pr.min : 145}" data-pr="min"></label>
+       <label class="hint">Hasta (rápido) <input type="number" min="0" max="255" value="${pr ? pr.max : 255}" data-pr="max"></label></div>
+     <p class="hint">Con la barra de Rotación en cero el prisma queda fijo; al subirla usa estos valores del canal del prisma.</p>`;
 }
 const WHEEL_COLORS = [
   ['Blanco', '#ffffff'], ['Rojo', '#ff2020'], ['Naranja', '#ff8a1a'], ['Ámbar', '#ffb030'], ['Amarillo', '#ffe21a'],
@@ -721,6 +729,11 @@ function parseWheel(text, withHex) {
 function collectDraft() {
   for (const t of $$('[data-wheel]')) draft[t.dataset.wheel] = parseWheel(t.value, t.dataset.wheel === 'color_wheel');
   for (const i of $$('[data-st]')) { draft.strobe = draft.strobe || {}; draft.strobe[i.dataset.st] = Math.max(0, Math.min(255, +i.value || 0)); }
+  const prOn = $('[data-pr=on]');
+  if (prOn && $('#prismEdit').style.display !== 'none') {
+    if (prOn.checked) draft.prism_rot = { min: Math.max(0, Math.min(255, +$('[data-pr=min]').value || 0)), max: Math.max(0, Math.min(255, +$('[data-pr=max]').value || 255)) };
+    else delete draft.prism_rot;
+  }
   const clean = JSON.parse(JSON.stringify(draft)); delete clean.caps; delete clean.id; delete clean.origen;
   return clean;
 }
@@ -846,7 +859,7 @@ function buildStatic() {
   });
   for (const k of ['prot', 'focus', 'strobe']) $('#' + k).oninput = (e) => {
     const ids = selWith(k); if (!ids.length) return;
-    $('#' + k + 'Val').textContent = k === 'strobe' && +e.target.value < 0.005 ? 'no' : pct(+e.target.value);
+    $('#' + k + 'Val').textContent = k === 'strobe' && +e.target.value < 0.005 ? 'no' : k === 'prot' && +e.target.value < 0.005 ? 'quieto' : pct(+e.target.value);
     sendLatest(k, 'set_attrs', { ids, attrs: { [k]: +e.target.value } });
   };
 

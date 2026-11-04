@@ -213,3 +213,37 @@ def test_guardar_y_recargar_show():
     data = e.export_show()
     e2 = Engine(e.lib, data)
     assert e2.look["eq_par3"]["b"] == 1 and e2.fx[0]["type"] == "onda"
+
+
+def test_rotacion_del_prisma_en_el_canal_del_prisma():
+    e = make()
+    e.set_attrs(["eq_cab1"], {"dim": 1})
+    e.set_wheel(["eq_cab1"], "prism", 1)
+    assert ch(e.tick(), 10) == 128                 # prisma fijo
+    e.set_attrs(["eq_cab1"], {"prot": 0.0001})
+    assert ch(e.tick(), 10) == 128                 # rotación en cero: sigue fijo
+    e.set_attrs(["eq_cab1"], {"prot": 0.01})
+    assert 145 <= ch(e.tick(), 10) <= 147          # rotación lenta
+    e.set_attrs(["eq_cab1"], {"prot": 1.0})
+    assert ch(e.tick(), 10) == 255                 # rotación rápida
+    assert ch(e.tick(), 11) == 0                   # el canal 11 no recibe la rotación
+
+
+def test_perfil_guardado_con_gobos_viejos_se_corrige(tmp_path):
+    import json
+    from luces.fixtures import Library, caps
+    old = json.load(open(os.path.join(ROOT, "perfiles", "venetian_vt_b100_12ch.json"), encoding="utf-8"))
+    old["gobo"] = [{"nombre": n, "dmx": v} for n, v in zip(["Abierto"] + ["Gobo %d" % k for k in range(1, 10)],
+                                                         [0, 14, 28, 42, 56, 70, 84, 98, 112, 126])]
+    old.pop("prism_rot", None)
+    (tmp_path / "venetian_vt_b100_12ch.json").write_text(json.dumps(old), encoding="utf-8")
+    lib = Library(os.path.join(ROOT, "perfiles"), str(tmp_path))
+    p = lib.get("venetian_vt_b100_12ch")
+    assert p["origen"] == "usuario"
+    assert max(g["dmx"] for g in p["gobo"]) == 76          # ninguno en la zona que tiembla
+    assert p["prism_rot"] == {"min": 145, "max": 255} and "prot" in caps(p)
+    # un perfil que el usuario ya calibró no se toca
+    old["gobo"] = [{"nombre": "Abierto", "dmx": 0}, {"nombre": "Gobo 1", "dmx": 10}]
+    (tmp_path / "venetian_vt_b100_12ch.json").write_text(json.dumps(old), encoding="utf-8")
+    lib.reload()
+    assert [g["dmx"] for g in lib.get("venetian_vt_b100_12ch")["gobo"]] == [0, 10]

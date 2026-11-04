@@ -87,6 +87,27 @@ def nearest_slot(slots, rgb):
     return best
 
 
+# Gobos que adiviné en la primera versión del VT-B100: los de 84 en adelante
+# caen en la zona de "gobo shake" (tiemblan). Si un perfil todavía los tiene,
+# se reemplazan por el centro de cada gobo fijo (pasos de 8: 0-7 abierto, 8-15 gobo 1…).
+OLD_VT_GOBOS = [0, 14, 28, 42, 56, 70, 84, 98, 112, 126]
+VT_GOBOS = [{"nombre": "Abierto", "dmx": 0}] + [{"nombre": "Gobo %d" % k, "dmx": 8 * k + 4} for k in range(1, 10)]
+VT_PRISM_ROT = {"min": 145, "max": 255}
+
+
+def migrate(pid, p):
+    """Arreglos automáticos para perfiles guardados con valores viejos."""
+    if not pid.startswith("venetian_vt_b100") and "VT-B100" not in str(p.get("nombre", "")):
+        return p
+    if [g.get("dmx") for g in p.get("gobo", [])] == OLD_VT_GOBOS:
+        p["gobo"] = [dict(g) for g in VT_GOBOS]
+    attrs = [c.get("attr") for c in p.get("canales", [])]
+    if "prism" in attrs and "prism_rot" not in p:
+        # en el VT-B100 la rotación del prisma está en el mismo canal del prisma
+        p["prism_rot"] = dict(VT_PRISM_ROT)
+    return p
+
+
 class Library:
     """Biblioteca de perfiles: los que vienen con el programa + los del usuario."""
 
@@ -109,6 +130,7 @@ class Library:
                         p = json.load(f)
                     p["id"] = fn[:-5]
                     p["origen"] = origen
+                    migrate(p["id"], p)
                     self.profiles[p["id"]] = p
                 except Exception as e:  # perfil roto: se ignora
                     print("Perfil inválido", fn, e)
@@ -147,6 +169,8 @@ def caps(profile):
                    ("focus", "focus"), ("strobe", "strobe"), ("smoke", "smoke")):
         if a in attrs:
             c.add(cap)
+    if "prism" in attrs and profile.get("prism_rot"):
+        c.add("prot")  # rotación dentro del canal del prisma
     if "pan" in c or "tilt" in c:
         c.add("mover")
     return c

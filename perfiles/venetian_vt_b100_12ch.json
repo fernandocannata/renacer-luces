@@ -108,39 +108,39 @@
     },
     {
       "nombre": "Gobo 1",
-      "dmx": 14
+      "dmx": 12
     },
     {
       "nombre": "Gobo 2",
-      "dmx": 28
+      "dmx": 20
     },
     {
       "nombre": "Gobo 3",
-      "dmx": 42
+      "dmx": 28
     },
     {
       "nombre": "Gobo 4",
-      "dmx": 56
+      "dmx": 36
     },
     {
       "nombre": "Gobo 5",
-      "dmx": 70
+      "dmx": 44
     },
     {
       "nombre": "Gobo 6",
-      "dmx": 84
+      "dmx": 52
     },
     {
       "nombre": "Gobo 7",
-      "dmx": 98
+      "dmx": 60
     },
     {
       "nombre": "Gobo 8",
-      "dmx": 112
+      "dmx": 68
     },
     {
       "nombre": "Gobo 9",
-      "dmx": 126
+      "dmx": 76
     }
   ],
   "prism": [
@@ -152,5 +152,9 @@
       "nombre": "Prisma",
       "dmx": 128
     }
-  ]
+  ],
+  "prism_rot": {
+    "min": 145,
+    "max": 255
+  }
 }
