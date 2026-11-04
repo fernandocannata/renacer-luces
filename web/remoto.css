@@ -133,7 +133,7 @@ svg .hz { stroke: rgba(242, 235, 223, .14); stroke-width: 1; stroke-dasharray: 3
 
 /* pestañas */
 .tabs {
-  position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; display: grid; grid-template-columns: repeat(4, 1fr);
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; display: grid; grid-template-columns: repeat(5, 1fr);
   padding: 6px 6px calc(6px + var(--safe-b)); background: rgba(20, 16, 25, .97); border-top: 1px solid var(--line);
 }
 .tabs button { background: transparent; color: var(--muted); padding: 13px 2px; font-size: 14px; border-radius: 8px; }
@@ -171,3 +171,7 @@ svg .hz { stroke: rgba(242, 235, 223, .14); stroke-width: 1; stroke-dasharray: 3
 .fxt::after { content: ""; position: absolute; left: 8px; right: 8px; bottom: 4px; height: 4px; border-radius: 2px; background: var(--lc); }
 .fxt.on { background: var(--ctrl-hi); border-color: var(--amber); color: var(--text); box-shadow: inset 0 0 0 1px var(--amber); }
 .selbox .chips { flex-wrap: wrap; overflow: visible; }
+.tabs button { font-size: 14.5px; padding: 13px 0; }
+.slots { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); }
+.slots button { padding: 14px 6px; background: var(--panel); border-color: rgba(255, 255, 255, .06); font: 500 14px var(--body); }
+.slots button.on { background: var(--amber); color: var(--amber-ink); font-weight: 700; }

@@ -204,6 +204,20 @@ function buildStatic() {
   });
   $('#mine').addEventListener('click', (e) => { const b = e.target.closest('[data-mine]'); if (!b) return; const ids = pick(); if (ids.length) api('set_color', { ids, rgbw: S.app_settings.colores_propios[+b.dataset.mine].rgbw }); });
 
+  // haz: gobo, prisma, foco y strobo del equipo (solo a los elegidos que lo tienen)
+  const withCap = (c) => groupIds().filter((i) => capsOf(i).has(c));
+  $('section[data-tab=haz]').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-slot]');
+    if (b) { const ids = withCap(b.dataset.slot); if (ids.length) api('set_wheel', { ids, key: b.dataset.slot, index: +b.dataset.i }); }
+    const st = e.target.closest('[data-strb]');
+    if (st) { const ids = withCap('strobe'); if (ids.length) api('set_attrs', { ids, attrs: { strobe: +st.dataset.strb } }); }
+  });
+  for (const k of ['prot', 'focus', 'strobe']) $('#' + k).oninput = (e) => {
+    const ids = withCap(k); if (!ids.length) return;
+    $('#' + k + 'Val').textContent = hazTxt(k, +e.target.value);
+    sendLatest(k, 'set_attrs', { ids, attrs: { [k]: +e.target.value } });
+  };
+
   window.addEventListener('blur', () => { for (const k of ['flash', 'strobe', 'strobe2']) if (S && S.holds.includes(k)) api('hold', { kind: k, on: false }); });
 }
 
@@ -229,7 +243,7 @@ function render() {
   for (const b of $$('[data-hold]')) b.classList.toggle('held', S.holds.includes(b.dataset.hold));
   if (document.activeElement !== $('#master')) $('#master').value = S.master;
   $('#masterVal').textContent = pct(S.master);
-  renderSel(); renderCues(); renderScenes(); renderFx(); renderMov(); renderColor();
+  renderSel(); renderCues(); renderScenes(); renderFx(); renderMov(); renderColor(); renderHaz();
 }
 
 function renderSel() {
@@ -335,6 +349,27 @@ function renderColor() {
     : `<button class="swatch" style="--sw:${c.hex}" data-pal="${i}">${esc(c.nombre)}</button>`).join('');
   $('#wheel').innerHTML = slots.map((sl, i) => `<button class="swatch ${i === cur ? 'cur' : ''}" style="--sw:${slotBg(sl)}" data-ws="${i}">${esc(sl.nombre)}</button>`).join('');
   $('#mine').innerHTML = mine.map((m, i) => `<button class="swatch" style="--sw:${rgbwHex(m.rgbw)}" data-mine="${i}">${esc(m.nombre)}</button>`).join('');
+}
+
+const hazTxt = (k, v) => (v == null ? '—' : k === 'strobe' && v < 0.005 ? 'no' : k === 'prot' && v < 0.005 ? 'quieto' : pct(v));
+function renderHaz() {
+  const ids = groupIds();
+  const w = (c) => ids.filter((i) => capsOf(i).has(c));
+  const show = (el, on) => ($(el).style.display = on ? '' : 'none');
+  const g = w('gobo'), pr = w('prism'), po = w('prot'), fo = w('focus'), sb = w('strobe');
+  show('#hzGobo', g.length); show('#hzPrism', pr.length); show('#hzProt', po.length); show('#hzFocus', fo.length); show('#hzStrobe', sb.length);
+  $('#hazNone').textContent = !ids.length ? 'Elegí arriba los equipos.' : (g.length || pr.length || fo.length || sb.length) ? '' : 'Los equipos elegidos no tienen gobos, prisma ni strobo.';
+  for (const [k, list] of [['prot', po], ['focus', fo], ['strobe', sb]]) {
+    const v = list.length ? (lookOf(list[0])[k] ?? 0) : null;
+    if (document.activeElement !== $('#' + k)) $('#' + k).value = v ?? 0;
+    $('#' + k + 'Val').textContent = hazTxt(k, v);
+  }
+  const slots = (list, key) => (list.length ? PROF[fx(list[0]).profile]?.[key] || [] : []);
+  const cur = (list, key) => (list.length ? lookOf(list[0])[key] ?? 0 : -1);
+  if (!changed('haz', [slots(g, 'gobo'), cur(g, 'gobo'), slots(pr, 'prism'), cur(pr, 'prism')])) return;
+  const html = (list, key) => slots(list, key).map((sl, i) => `<button class="${i === cur(list, key) ? 'on' : ''}" data-slot="${key}" data-i="${i}">${esc(sl.nombre)}</button>`).join('');
+  $('#goboSlots').innerHTML = html(g, 'gobo');
+  $('#prismSlots').innerHTML = html(pr, 'prism');
 }
 
 boot();

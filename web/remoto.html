@@ -71,13 +71,28 @@
     <div id="wheelBox"><h2>Colores de la rueda</h2><div class="grid swatches" id="wheel"></div></div>
     <div id="mineBox"><h2>Mis colores</h2><div class="grid swatches" id="mine"></div></div>
   </section>
+
+  <section data-tab="haz">
+    <div class="selbox" data-sel></div>
+    <p class="hint" id="hazNone"></p>
+    <div id="hzGobo"><h2>Gobo</h2><div class="grid slots" id="goboSlots"></div></div>
+    <div id="hzPrism"><h2>Prisma</h2><div class="grid slots" id="prismSlots"></div>
+      <div class="dimrow" id="hzProt"><label for="prot">Rotación</label><input type="range" id="prot" min="0" max="1" step="0.01"><output id="protVal">—</output></div>
+    </div>
+    <div id="hzFocus"><h2>Foco</h2><div class="dimrow"><label for="focus">Foco</label><input type="range" id="focus" min="0" max="1" step="0.01"><output id="focusVal">—</output></div></div>
+    <div id="hzStrobe"><h2>Strobo del equipo</h2>
+      <div class="dimrow"><label for="strobe">Velocidad</label><input type="range" id="strobe" min="0" max="1" step="0.01"><output id="strobeVal">—</output></div>
+      <div class="row4"><button data-strb="0">No</button><button data-strb="0.3">Lento</button><button data-strb="0.65">Medio</button><button data-strb="1">Rápido</button></div>
+    </div>
+  </section>
 </main>
 
 <nav class="tabs">
   <button data-go="esc" class="on">Escenas</button>
   <button data-go="fx">Efectos</button>
-  <button data-go="mov">Movimientos</button>
+  <button data-go="mov">Mover</button>
   <button data-go="col">Color</button>
+  <button data-go="haz">Haz</button>
 </nav>
 
 <div id="toast"></div>
