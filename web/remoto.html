@@ -41,7 +41,7 @@
   </section>
 
   <section data-tab="fx">
-    <div class="chips" data-groups></div>
+    <div class="selbox" data-sel></div>
     <h2 id="fxDimT">Intensidad</h2>
     <div class="grid presets" id="fxDim"></div>
     <h2 id="fxColT">Color</h2>
@@ -52,6 +52,7 @@
   </section>
 
   <section data-tab="mov">
+    <div class="selbox" data-sel="mov"></div>
     <p class="hint" id="movHint"></p>
     <h2>Posiciones</h2>
     <div class="grid layouts" id="layouts"></div>
@@ -63,7 +64,7 @@
   </section>
 
   <section data-tab="col">
-    <div class="chips" data-groups></div>
+    <div class="selbox" data-sel></div>
     <div class="dimrow"><label for="dim">Intensidad</label><input type="range" id="dim" min="0" max="1" step="0.01"><output id="dimVal">0%</output></div>
     <div class="row4"><button data-dim="0">0</button><button data-dim="0.5">50</button><button data-dim="1">Full</button><button id="off">Apagar</button></div>
     <div id="palBox"><h2>Color</h2><div class="grid swatches" id="palette"></div></div>

@@ -8,7 +8,7 @@ const pct = (v) => Math.round((v || 0) * 100) + '%';
 const APP = window.RenacerApp || null;   // existe dentro de la app de Android
 
 let INIT = null, S = null, LIVE = { pv: {} }, PROF = {};
-let group = 'all', lastScene = null, stack = false;
+let sel = null, lastScene = null, stack = false;   // sel: equipos elegidos en el celular
 const sigs = {};
 const changed = (k, v) => { const s = JSON.stringify(v); if (sigs[k] === s) return false; sigs[k] = s; return true; };
 
@@ -74,11 +74,12 @@ const fx = (id) => fixtures().find((f) => f.id === id);
 const capsOf = (id) => new Set(PROF[fx(id)?.profile]?.caps || []);
 const typeOf = (id) => PROF[fx(id)?.profile]?.tipo || 'dimmer';
 const lookOf = (id) => (S && S.look[id]) || {};
-function groupIds() {
-  const lights = fixtures().filter((f) => typeOf(f.id) !== 'humo').map((f) => f.id);
-  return group === 'all' ? lights : fixtures().filter((f) => typeOf(f.id) === group).map((f) => f.id);
-}
+const lights = () => fixtures().filter((f) => typeOf(f.id) !== 'humo').map((f) => f.id);
+const ofType = (t) => fixtures().filter((f) => typeOf(f.id) === t).map((f) => f.id);
 const movers = () => fixtures().filter((f) => capsOf(f.id).has('mover')).map((f) => f.id);
+// equipos elegidos, en el orden del show
+const groupIds = () => lights().filter((i) => sel.has(i));
+const moverIds = () => movers().filter((i) => sel.has(i));
 function avail(ids) {
   const every = (fn) => ids.length > 0 && ids.every((i) => fn(capsOf(i)));
   return { dim: every((c) => c.has('dim')), color: every((c) => c.has('rgb') || c.has('cw')), rgb: every((c) => c.has('rgb')) };
@@ -145,17 +146,28 @@ function buildStatic() {
     lastScene = b.dataset.scene; sigs.scenes = null; api('recall_scene', { id: b.dataset.scene });
   });
 
-  // grupos
-  for (const box of $$('[data-groups]')) box.addEventListener('click', (e) => {
-    const b = e.target.closest('[data-g]'); if (!b) return;
-    group = b.dataset.g; sigs.groups = null; sigs.fxp = null; sigs.col = null; render();
+  // selección de equipos
+  for (const box of $$('[data-sel]')) box.addEventListener('click', (e) => {
+    const g = e.target.closest('[data-g]'), f = e.target.closest('[data-fid]');
+    if (g) {
+      const k = g.dataset.g, mov = box.dataset.sel === 'mov';
+      const ids = k === 'all' ? (mov ? movers() : lights()) : k === 'none' ? [] : ofType(k);
+      if (mov) { for (const i of movers()) sel.delete(i); for (const i of ids) sel.add(i); }
+      else sel = new Set(ids);
+    } else if (f) {
+      const id = f.dataset.fid;
+      sel.has(id) ? sel.delete(id) : sel.add(id);
+    } else return;
+    sigs.sel = null; sigs.fxp = null; sigs.col = null; render();
   });
 
   // efectos
   for (const box of [$('#fxDim'), $('#fxCol')]) box.addEventListener('click', async (e) => {
     const b = e.target.closest('[data-fxp]'); if (!b) return;
     const p = INIT.efectos.find((x) => x.id === b.dataset.fxp);
-    if (await api('add_fx', { ids: groupIds(), type: p.type, params: { ...p.params } })) toast(p.name + ' en marcha');
+    const ids = groupIds();
+    if (!ids.length) return toast('Elegí al menos un equipo', true);
+    if (await api('add_fx', { ids, type: p.type, params: { ...p.params } })) toast(p.name + ' en marcha');
   });
   for (const box of [$('#fxActive'), $('#movActive')]) box.addEventListener('click', (e) => {
     const b = e.target.closest('[data-del]'); if (b) api('remove_fx', { id: b.dataset.del });
@@ -165,28 +177,32 @@ function buildStatic() {
   $('#moves').addEventListener('click', async (e) => {
     const b = e.target.closest('[data-move]'); if (!b) return;
     const p = INIT.frontal.presets[+b.dataset.move];
-    if (await api('add_fx', { ids: movers(), type: p.type, params: { ...p.params, name: p.name }, stack })) toast(p.name + (stack ? ' sumado' : ' en marcha'));
+    const ids = moverIds();
+    if (!ids.length) return toast('Elegí al menos un cabezal', true);
+    if (await api('add_fx', { ids, type: p.type, params: { ...p.params, name: p.name }, stack })) toast(p.name + (stack ? ' sumado' : ' en marcha'));
   });
-  $('#layouts').addEventListener('click', (e) => { const b = e.target.closest('[data-layout]'); if (b) api('front_layout', { ids: movers(), name: b.dataset.layout }); });
+  $('#layouts').addEventListener('click', (e) => { const b = e.target.closest('[data-layout]'); if (!b) return; const ids = moverIds(); if (!ids.length) return toast('Elegí al menos un cabezal', true); api('front_layout', { ids, name: b.dataset.layout }); });
   $('#stack').onclick = () => { stack = !stack; $('#stack').classList.toggle('on', stack); $('#stack').setAttribute('aria-pressed', stack); };
   $('#movStop').onclick = () => {
-    const moves = S.fx.filter((f) => INIT.fx_types[f.type]?.family === 'pos');
+    const ids = new Set(moverIds());
+    const moves = S.fx.filter((f) => INIT.fx_types[f.type]?.family === 'pos' && f.ids.some((i) => ids.has(i)));
     moves.forEach((f) => api('remove_fx', { id: f.id }));
     toast(moves.length ? 'Movimiento frenado' : 'No hay movimiento andando');
   };
 
-  // color e intensidad
-  $('#dim').oninput = (e) => { $('#dimVal').textContent = pct(+e.target.value); sendLatest('dim', 'set_attrs', { ids: groupIds(), attrs: { dim: +e.target.value } }); };
-  for (const b of $$('[data-dim]')) b.onclick = () => api('set_attrs', { ids: groupIds(), attrs: { dim: +b.dataset.dim } });
-  $('#off').onclick = () => api('clear', { ids: groupIds() });
-  $('#palette').addEventListener('click', (e) => { const b = e.target.closest('[data-pal]'); if (b) api('set_color', { ids: groupIds(), rgbw: INIT.palette[+b.dataset.pal].rgbw }); });
+  // color e intensidad (sin equipos elegidos no hace nada)
+  const pick = () => { const ids = groupIds(); if (!ids.length) toast('Elegí al menos un equipo', true); return ids; };
+  $('#dim').oninput = (e) => { $('#dimVal').textContent = pct(+e.target.value); const ids = groupIds(); if (ids.length) sendLatest('dim', 'set_attrs', { ids, attrs: { dim: +e.target.value } }); };
+  for (const b of $$('[data-dim]')) b.onclick = () => { const ids = pick(); if (ids.length) api('set_attrs', { ids, attrs: { dim: +b.dataset.dim } }); };
+  $('#off').onclick = () => { const ids = pick(); if (ids.length) api('clear', { ids }); };
+  $('#palette').addEventListener('click', (e) => { const b = e.target.closest('[data-pal]'); if (!b) return; const ids = pick(); if (ids.length) api('set_color', { ids, rgbw: INIT.palette[+b.dataset.pal].rgbw }); });
   $('#wheel').addEventListener('click', (e) => {
     const b = e.target.closest('[data-ws]'); if (!b) return;
-    const ids = groupIds();
+    const ids = pick(); if (!ids.length) return;
     api('set_wheel', { ids, key: 'cw', index: +b.dataset.ws });
     if ((lookOf(ids[0]).dim ?? 0) === 0) api('set_attrs', { ids, attrs: { dim: 1 } });
   });
-  $('#mine').addEventListener('click', (e) => { const b = e.target.closest('[data-mine]'); if (b) api('set_color', { ids: groupIds(), rgbw: S.app_settings.colores_propios[+b.dataset.mine].rgbw }); });
+  $('#mine').addEventListener('click', (e) => { const b = e.target.closest('[data-mine]'); if (!b) return; const ids = pick(); if (ids.length) api('set_color', { ids, rgbw: S.app_settings.colores_propios[+b.dataset.mine].rgbw }); });
 
   window.addEventListener('blur', () => { for (const k of ['flash', 'strobe', 'strobe2']) if (S && S.holds.includes(k)) api('hold', { kind: k, on: false }); });
 }
@@ -213,16 +229,45 @@ function render() {
   for (const b of $$('[data-hold]')) b.classList.toggle('held', S.holds.includes(b.dataset.hold));
   if (document.activeElement !== $('#master')) $('#master').value = S.master;
   $('#masterVal').textContent = pct(S.master);
-  renderGroups(); renderCues(); renderScenes(); renderFx(); renderMov(); renderColor();
+  renderSel(); renderCues(); renderScenes(); renderFx(); renderMov(); renderColor();
 }
 
-function renderGroups() {
-  const present = [...new Set(fixtures().map((f) => typeOf(f.id)))].filter((t) => t !== 'humo');
-  if (!present.includes(group) && group !== 'all') group = 'all';
-  if (!changed('groups', [present, group])) return;
-  const html = [['all', 'Todos'], ...present.map((t) => [t, TYPE_LABEL[t] || t])]
-    .map(([k, l]) => `<button data-g="${k}" class="${k === group ? 'on' : ''}">${esc(l)}</button>`).join('');
-  $$('[data-groups]').forEach((b) => (b.innerHTML = html));
+function renderSel() {
+  const all = lights(), have = new Set(all);
+  if (sel === null) sel = new Set(all);
+  for (const i of [...sel]) if (!have.has(i)) sel.delete(i);
+  const present = [...new Set(all.map(typeOf))];
+  const looks = all.map((i) => [i, tileColor(i)]);
+  if (!changed('sel', [all, [...sel], looks, fixtures().map((f) => f.name)])) return;
+  let count = {};
+  const tile = (i) => {
+    const t = typeOf(i), n = (count[t] = (count[t] || 0) + 1), f = fx(i);
+    const word = t === 'cabezal' ? 'Cabezal' : t === 'par' ? 'Par' : (TYPE_LABEL[t] || 'Equipo').replace(/s$/, '');
+    return `<button class="fxt ${sel.has(i) ? 'on' : ''}" data-fid="${i}" aria-pressed="${sel.has(i)}" title="${esc(f.name)}" style="--lc:${tileColor(i)}">
+      <b>${n}</b><small>${esc(word)}</small></button>`;
+  };
+  for (const box of $$('[data-sel]')) {
+    count = {};
+    const mov = box.dataset.sel === 'mov';
+    const ids = mov ? movers() : all;
+    const on = (k) => {
+      const g = k === 'all' ? ids : k === 'none' ? [] : ofType(k);
+      const cur = ids.filter((i) => sel.has(i));
+      return cur.length === g.length && g.every((i) => sel.has(i));
+    };
+    const groups = mov ? [['all', 'Todos los cabezales'], ['none', 'Ninguno']]
+      : [['all', 'Todos'], ...present.map((t) => [t, TYPE_LABEL[t] || t]), ['none', 'Ninguno']];
+    box.innerHTML = `<div class="chips">${groups.map(([k, l]) => `<button data-g="${k}" class="${on(k) ? 'on' : ''}">${esc(l)}</button>`).join('')}</div>
+      ${[...new Set(ids.map(typeOf))].map((t) => `<div class="tiles">${ids.filter((i) => typeOf(i) === t).map(tile).join('')}</div>`).join('')}`;
+  }
+}
+// color actual de cada equipo para la rayita del botón
+function tileColor(i) {
+  const l = lookOf(i), p = PROF[fx(i)?.profile] || {};
+  if ((l.dim ?? 1) <= 0.01) return '#2a2331';
+  if ('r' in l) return rgbwHex([l.r || 0, l.g || 0, l.b || 0, l.w || 0]);
+  const sl = (p.color_wheel || [])[l.cw ?? 0];
+  return sl ? (sl.hex || '#fff') : '#f6efe2';
 }
 
 function renderCues() {
@@ -243,13 +288,13 @@ function renderScenes() {
 
 function renderFx() {
   const ids = groupIds(), av = avail(ids);
-  if (changed('fxp', [group, av, ids.length])) {
+  if (changed('fxp', [av, ids.length])) {
     const ok = (need) => (need === 'dim' ? av.dim : need === 'rgb' ? av.rgb : av.color);
     const btns = (fam) => INIT.efectos.filter((p) => p.family === fam && ok(p.needs)).map((p) => `<button data-fxp="${p.id}">${gridSvg(p.grid)}<span>${esc(p.name)}</span></button>`).join('');
     const d = btns('dim'), c = btns('color');
     $('#fxDim').innerHTML = d; $('#fxCol').innerHTML = c;
     $('#fxDimT').style.display = d ? '' : 'none'; $('#fxColT').style.display = c ? '' : 'none';
-    $('#fxNone').textContent = d || c ? '' : 'Este grupo no tiene efectos en común.';
+    $('#fxNone').textContent = !ids.length ? 'Elegí arriba los equipos.' : d || c ? '' : 'Estos equipos no tienen efectos en común.';
   }
   const act = (list, empty) => list.length ? list.map((f) => {
     const n = f.ids.length;
@@ -263,10 +308,11 @@ function renderFx() {
 }
 
 function renderMov() {
-  const n = movers().length;
+  const n = movers().length, k = moverIds().length;
   $('#movHint').textContent = !n ? 'No hay cabezales en el show.'
     : S.rig && !S.rig.calibrated ? 'Ojo: el frente al público todavía no está ajustado (se hace en la PC).'
-    : `Se aplica a los ${n} cabezales. Elegí una posición y después un movimiento.`;
+    : !k ? 'Elegí arriba los cabezales.'
+    : `Se aplica a ${k === n ? 'los ' + n + ' cabezales' : k === 1 ? '1 cabezal' : k + ' cabezales'}.`;
 }
 
 function renderColor() {
@@ -284,7 +330,7 @@ function renderColor() {
   $('#mineBox').style.display = onlyRgb && mine.length ? '' : 'none';
   const slots = onlyWheel ? (PROF[fx(wheel[0]).profile]?.color_wheel || []) : [];
   const cur = onlyWheel ? lookOf(wheel[0]).cw : -1;
-  if (!changed('col', [group, wheel.length > 0, slots, cur, mine])) return;
+  if (!changed('col', [wheel.length > 0, slots, cur, mine])) return;
   $('#palette').innerHTML = INIT.palette.map((c, i) => (wheel.length && PAL_NOT_FOR_MOVERS.includes(c.nombre)) ? ''
     : `<button class="swatch" style="--sw:${c.hex}" data-pal="${i}">${esc(c.nombre)}</button>`).join('');
   $('#wheel').innerHTML = slots.map((sl, i) => `<button class="swatch ${i === cur ? 'cur' : ''}" style="--sw:${slotBg(sl)}" data-ws="${i}">${esc(sl.nombre)}</button>`).join('');
