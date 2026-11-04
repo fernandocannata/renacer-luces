@@ -652,6 +652,9 @@ function buildProbar() {
         <input type="range" min="0" max="255" value="${S.test[addr] ?? 0}" data-test="${addr}">
         <span class="v">${S.test[addr] ?? '—'}</span></div>`;
     }).join('');
+  $('#chTools').innerHTML = `<button class="ghost small" id="btnChAdd">+ Agregar canal</button>
+    <button class="ghost small danger" id="btnChDel" ${draft.canales.length <= 1 ? 'disabled' : ''}>− Quitar el último canal</button>
+    <span class="hint">El perfil tiene <b>${draft.canales.length}</b> canales: tiene que coincidir con el modo del equipo (por ejemplo ${draft.canales.length}CH).</span>`;
   const attrs = new Set(draft.canales.map((c) => c.attr));
   const chAddr = (attr) => { const i = draft.canales.findIndex((c) => c.attr === attr); return i < 0 ? null : f.address + i; };
   const wheel = (key, title, withHex) => {
@@ -1078,6 +1081,18 @@ function buildStatic() {
       if (same >= 0) list[same] = entry; else list.push(entry);
       syncWheel(key);
       toast(`${name} anotado en ${cur}`);
+    }
+  });
+  $('#chTools').addEventListener('click', (e) => {
+    if (!draft) return;
+    if (e.target.closest('#btnChAdd')) {
+      collectDraft();
+      draft.canales.push({ attr: 'raw', label: 'Canal ' + (draft.canales.length + 1), default: 0 });
+      buildProbar();
+      toast('Canal agregado. Elegí qué hace y tocá Guardar perfil.');
+    }
+    if (e.target.closest('#btnChDel') && draft.canales.length > 1 && confirm('¿Quitar el último canal del perfil?')) {
+      collectDraft(); draft.canales.pop(); buildProbar();
     }
   });
   $('#btnSaveProfile').onclick = async () => {
