@@ -71,10 +71,15 @@ def nearest_slot(slots, rgb):
     """Índice de la rueda de color más parecido a un color RGB."""
     if not slots:
         return 0
+    # los medios colores (mitad y mitad) no se eligen solos: solo a mano
+    if all(s.get("hex2") for s in slots):
+        return 0
     target = _norm(rgb)
     th, ts, _ = colorsys.rgb_to_hsv(*target)
     best, best_d = 0, 1e9
     for i, s in enumerate(slots):
+        if s.get("hex2"):
+            continue
         sr = _norm(hex_to_rgb(s.get("hex", "#ffffff")))
         sh, ss, _ = colorsys.rgb_to_hsv(*sr)
         if ts < 0.25 or ss < 0.25:  # blancos / poco saturados: compara saturación
@@ -93,6 +98,9 @@ def nearest_slot(slots, rgb):
 OLD_VT_GOBOS = [0, 14, 28, 42, 56, 70, 84, 98, 112, 126]
 VT_GOBOS = [{"nombre": "Abierto", "dmx": 0}] + [{"nombre": "Gobo %d" % k, "dmx": 8 * k + 4} for k in range(1, 10)]
 VT_PRISM_ROT = {"min": 145, "max": 255}
+# Gobos que grabó Fernando en sus VT-B100, con el nombre de cada dibujo
+VT_GOBO_NAMES = {0: "Abierto", 12: "Círculo", 22: "Serpiente", 32: "Cruz", 42: "Margarita",
+                 52: "Estrella", 62: "Espiral", 72: "Flor"}
 
 
 def migrate(pid, p):
@@ -101,6 +109,11 @@ def migrate(pid, p):
         return p
     if [g.get("dmx") for g in p.get("gobo", [])] == OLD_VT_GOBOS:
         p["gobo"] = [dict(g) for g in VT_GOBOS]
+    # gobos grabados con los valores reales: ponerles su nombre si siguen como "Gobo N"
+    for g in p.get("gobo", []):
+        name = VT_GOBO_NAMES.get(g.get("dmx"))
+        if name and (str(g.get("nombre", "")).startswith("Gobo") or g.get("nombre") == "Abierto"):
+            g["nombre"] = name
     attrs = [c.get("attr") for c in p.get("canales", [])]
     if "prism" in attrs and "prism_rot" not in p:
         # en el VT-B100 la rotación del prisma está en el mismo canal del prisma

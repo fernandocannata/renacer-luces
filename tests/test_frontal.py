@@ -179,3 +179,19 @@ def test_strobo2_al_tempo_y_libre():
     f = e.tick(t + 5)
     e.set_hold("strobe2", False)
     assert e.tick(t + 6)[48] == 255  # al soltar vuelve a la normalidad
+
+
+def test_gran_paneo_cubre_todo_el_frente_y_es_lento():
+    e = make()
+    p = next(x for x in frontal.catalog()["presets"] if x["id"] == "gran_paneo")
+    e.set_bpm(120)
+    e.add_fx(CAB, p["type"], dict(p["params"]))
+    t = time.monotonic()
+    xs, ys = [], []
+    for k in range(17 * 10):              # 17 segundos (una vuelta son 32 tiempos = 16 s)
+        e.tick(t + k * 0.1)
+        xs.append(e.preview[CAB[1]]["x"]); ys.append(e.preview[CAB[1]]["y"])
+    assert max(xs) - min(xs) > 1.8        # de un costado al otro
+    assert max(ys) - min(ys) > 1.4        # y de abajo hacia arriba
+    # lento: en medio segundo apenas se mueve
+    assert abs(xs[5] - xs[0]) < 0.3

@@ -247,3 +247,23 @@ def test_perfil_guardado_con_gobos_viejos_se_corrige(tmp_path):
     (tmp_path / "venetian_vt_b100_12ch.json").write_text(json.dumps(old), encoding="utf-8")
     lib.reload()
     assert [g["dmx"] for g in lib.get("venetian_vt_b100_12ch")["gobo"]] == [0, 10]
+
+
+def test_gobos_grabados_toman_su_nombre(tmp_path):
+    import json
+    from luces.fixtures import Library
+    prof = json.load(open(os.path.join(ROOT, "perfiles", "venetian_vt_b100_12ch.json"), encoding="utf-8"))
+    vals = [0, 12, 22, 32, 42, 52, 62, 72]
+    prof["gobo"] = [{"nombre": "Abierto" if v == 0 else "Gobo %d" % i, "dmx": v} for i, v in enumerate(vals)]
+    (tmp_path / "venetian_vt_b100_12ch.json").write_text(json.dumps(prof), encoding="utf-8")
+    lib = Library(os.path.join(ROOT, "perfiles"), str(tmp_path))
+    assert [g["nombre"] for g in lib.get("venetian_vt_b100_12ch")["gobo"]] == [
+        "Abierto", "Círculo", "Serpiente", "Cruz", "Margarita", "Estrella", "Espiral", "Flor"]
+
+
+def test_medios_colores_no_se_eligen_solos():
+    from luces.fixtures import nearest_slot
+    slots = [{"nombre": "Blanco", "dmx": 0, "hex": "#ffffff"},
+             {"nombre": "Rojo / Verde", "dmx": 8, "hex": "#ff2020", "hex2": "#24e04a"},
+             {"nombre": "Rojo", "dmx": 12, "hex": "#ff2020"}]
+    assert slots[nearest_slot(slots, (1, 0, 0))]["nombre"] == "Rojo"

@@ -33,5 +33,6 @@
     "off": 0,
     "min": 10,
     "max": 255
-  }
+  },
+  "icono": "tacho"
 }

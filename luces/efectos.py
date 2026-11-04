@@ -21,15 +21,23 @@ TYPES = {
     "chispas": ("dim", "Chispas", "dim"),
     "relampago": ("dim", "Relámpago", "dim"),
     "par_impar": ("dim", "Pares e impares", "dim"),
+    "centro": ("dim", "Desde el centro", "dim"),
+    "latido": ("dim", "Latido", "dim"),
+    "vela": ("dim", "Vela", "dim"),
+    "destellos": ("dim", "Destellos al azar", "dim"),
     "arcoiris": ("color", "Arcoíris", "color"),  # en cabezales recorre la rueda de color
     "colores": ("color", "Alternar colores", "color"),
     "alternar": ("color", "Pares e impares de color", "color"),
     "mitades": ("color", "Mitades", "color"),
     "fuego": ("color", "Fuego", "rgb"),
+    "degrade": ("color", "Degradé", "rgb"),
+    "confeti": ("color", "Confeti", "color"),
+    "barrido_color": ("color", "Barrido de color", "color"),
 }
 
 SIZE_LABEL = {"pulso": "Ancho", "rebote": "Ancho", "onda": "Profundidad", "azar": "Cantidad",
-              "chispas": "Cantidad", "relampago": "Frecuencia", "fuego": "Intensidad"}
+              "chispas": "Cantidad", "relampago": "Frecuencia", "fuego": "Intensidad",
+              "centro": "Ancho", "vela": "Profundidad", "destellos": "Cantidad", "barrido_color": "Ancho"}
 
 
 def frac(x):
@@ -90,6 +98,23 @@ def fx_eval(fx, k, n, ph, seed=""):
         return (1.0 if flash else 0.0), (1.0, 1.0, 1.0)
     if t == "par_impar":
         return (1.0 if (order + math.floor(ph * 2)) % 2 == 0 else 0.0), None
+    if t == "centro":  # una ola que sale del medio hacia los costados (invertido: entra)
+        u = abs(2.0 * k / (n - 1) - 1.0) if n > 1 else 0.0
+        f = frac(ph) * 1.4 - 0.2
+        if fx.get("reverse"):
+            f = 1.0 - f
+        return (1.0 if abs(u - f) < 0.12 + size * 0.35 else 0.0), None
+    if t == "latido":  # pum-pum, todos juntos
+        f = frac(p)
+        beat = max(math.exp(-((f - 0.06) / 0.045) ** 2), 0.75 * math.exp(-((f - 0.3) / 0.05) ** 2))
+        return 0.06 + 0.94 * beat, None
+    if t == "vela":  # titileo suave, cada uno a su ritmo
+        v = _smooth_noise("v" + str(seed) + str(k), ph * 10)
+        return 1 - size * 0.75 * (1 - v), None
+    if t == "destellos":  # apagados, con flashes cortos al azar
+        sub = ph * 16
+        on = _rnd(seed, "d", k, math.floor(sub)) < 0.08 + size * 0.3 and frac(sub) < 0.3
+        return (1.0 if on else 0.0), None
     if t == "arcoiris":
         return None, colorsys.hsv_to_rgb(frac(p), 1.0, 1.0)
     if t == "colores":
@@ -99,6 +124,20 @@ def fx_eval(fx, k, n, ph, seed=""):
     if t == "mitades":
         half = 0 if order < n / 2 else 1
         return None, hex_to_rgb(cols[(half + math.floor(ph * 2)) % 2 % len(cols)])
+    if t == "degrade":  # dos colores que se mezclan y corren
+        a, b = hex_to_rgb(cols[0]), hex_to_rgb(cols[1 % len(cols)])
+        m = 0.5 + 0.5 * math.cos(TAU * p)
+        return None, tuple(a[i] * m + b[i] * (1 - m) for i in range(3))
+    if t == "confeti":  # cada equipo con un color al azar, cambia en cada vuelta
+        r = _rnd(seed, "c", k, math.floor(ph))
+        return None, hex_to_rgb(cols[int(r * len(cols)) % len(cols)])
+    if t == "barrido_color":  # una franja del segundo color cruza sobre el primero
+        f = frac(ph) * (1 + 2 * 0.3) - 0.3
+        pos = f * (n - 1) if n > 1 else 0
+        if fx.get("reverse"):
+            pos = (n - 1) - pos
+        on = abs(k - pos) < max(0.5, size * n / 2)
+        return None, hex_to_rgb(cols[(1 if on else 0) % len(cols)])
     if t == "fuego":
         v = _smooth_noise(str(seed) + str(k), ph * 8)
         dim = 1 - size * 0.65 * (1 - v)
@@ -124,6 +163,15 @@ PRESETS = [
     ("color_par_impar", "Pares e impares de color", "alternar", {"beats": 2, "colors": ["#ff2ae6", "#22e6ee"]}),
     ("mitades", "Mitades", "mitades", {"beats": 4, "colors": ["#2a46ff", "#ffd60a"]}),
     ("fuego", "Fuego", "fuego", {"beats": 8, "size": 0.8}),
+    ("desde_centro", "Desde el centro", "centro", {"beats": 4, "size": 0.3}),
+    ("hacia_centro", "Hacia el centro", "centro", {"beats": 4, "size": 0.3, "reverse": True}),
+    ("latido", "Latido", "latido", {"beats": 2, "spread": 0.0}),
+    ("vela", "Vela", "vela", {"beats": 8, "size": 0.7}),
+    ("destellos", "Destellos al azar", "destellos", {"beats": 4, "size": 0.5}),
+    ("degrade", "Degradé", "degrade", {"beats": 8, "spread": 1.0, "colors": ["#ff2ae6", "#2a46ff"]}),
+    ("degrade_calido", "Degradé cálido", "degrade", {"beats": 8, "spread": 1.0, "colors": ["#ff2020", "#ffb030"]}),
+    ("confeti", "Confeti", "confeti", {"beats": 2, "colors": ["#ff2020", "#22e04a", "#2a46ff", "#ffd60a", "#ff2ae6"]}),
+    ("barrido_color", "Barrido de color", "barrido_color", {"beats": 4, "size": 0.3, "colors": ["#2a46ff", "#ffffff"]}),
 ]
 
 PREVIEW_BASE = (1.0, 0.82, 0.55)  # color de fondo para dibujar efectos de intensidad

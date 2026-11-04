@@ -108,6 +108,20 @@ comando OS2L: con Renacer LightShow abierto, tocá esa tecla una vez y desde
 ahí manda el pulso solo. El punto del botón se pone verde cuando llegan los
 pulsos.
 
+**Colores de los móviles.** Con solo cabezales elegidos, la pestaña de color
+muestra los colores reales de su rueda, incluidos los medios colores (mitad y
+mitad). Con *Grabar un color de la rueda* movés la rueda, elegís el nombre
+(y el segundo color si es mitad y mitad) y queda guardado.
+
+**Mis colores (Nebula y LED).** Con *Mezclar y grabar un color* armás el color
+con rojo, verde, azul y blanco, le ponés nombre y queda en *Mis colores* para
+todos los shows.
+
+**Escenario.** Los equipos cuelgan de truss: los pares arriba y los cabezales
+abajo; los equipos nuevos se agregan solos en su truss. En *Equipos y
+direcciones* podés elegir el dibujo de cada uno (beam, spot, wash, par LED
+plano, tacho, barra, strobo).
+
 **Clear.** Vuelve todo a cero, como recién abierto (luces apagadas, sin
 efectos, master al 100%, sin blackout). Durante unos segundos aparece
 *Deshacer* por si lo tocaste sin querer. No borra escenas ni el frente.

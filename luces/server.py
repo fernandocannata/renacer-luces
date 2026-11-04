@@ -230,6 +230,20 @@ class App:
             e.set_sync(c.get("on"))
             self.storage.settings["os2l_sync"] = e.sync_ext
             self.storage.save_settings()
+        elif cmd == "color_save":  # colores a medida, sirven en todos los shows
+            rgbw = [max(0.0, min(1.0, float(x))) for x in (list(c.get("rgbw", [])) + [0, 0, 0, 0])[:4]]
+            mine = self.storage.settings.setdefault("colores_propios", [])
+            name = str(c.get("name") or "Color %d" % (len(mine) + 1))[:30]
+            mine[:] = [m for m in mine if m.get("nombre") != name] + [{"nombre": name, "rgbw": rgbw}]
+            self.storage.save_settings()
+            e.changed()
+        elif cmd == "color_delete":
+            mine = self.storage.settings.setdefault("colores_propios", [])
+            i = int(c.get("index", -1))
+            if 0 <= i < len(mine):
+                mine.pop(i)
+                self.storage.save_settings()
+            e.changed()
         elif cmd == "tap":
             e.tap()
         elif cmd == "bpm":
@@ -245,7 +259,7 @@ class App:
         elif cmd == "add_fixtures":
             return e.add_fixtures(c["profile"], c.get("count", 1), c.get("address") or None, c.get("name") or None)
         elif cmd == "update_fixture":
-            e.update_fixture(c["id"], **{k: c[k] for k in ("name", "address", "invert_pan", "invert_tilt", "profile") if k in c})
+            e.update_fixture(c["id"], **{k: c[k] for k in ("name", "address", "invert_pan", "invert_tilt", "profile", "icono") if k in c})
         elif cmd == "remove_fixture":
             e.remove_fixture(c["id"])
         elif cmd == "move_fixture":

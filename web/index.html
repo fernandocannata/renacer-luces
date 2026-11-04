@@ -93,13 +93,54 @@
           <button class="small ghost" data-dim="0.75">75</button>
           <button class="small ghost" data-dim="1">Full</button>
         </div>
-        <h3>Color</h3>
-        <div class="swatches" id="palette"></div>
+        <div id="palBox">
+          <h3>Color</h3>
+          <div class="swatches" id="palette"></div>
+        </div>
+
+        <div id="wheelBox">
+          <h3>Colores de la rueda</h3>
+          <div class="swatches" id="wheelSw"></div>
+          <details class="box recbox" id="wheelRec">
+            <summary><b>Grabar un color de la rueda</b> <span class="hint">(también mitad y mitad)</span></summary>
+            <p class="hint">Mové la rueda hasta ver el color que querés y ponele nombre. Para los medios colores elegí también el segundo.</p>
+            <div class="row wdial">
+              <button class="small ghost" data-wrstep="-5">−5</button><button class="small ghost" data-wrstep="-1">−1</button>
+              <input type="range" min="0" max="255" value="0" id="wrVal" class="grow">
+              <button class="small ghost" data-wrstep="1">+1</button><button class="small ghost" data-wrstep="5">+5</button>
+              <output class="addr" id="wrOut">0</output>
+            </div>
+            <div class="row" style="margin-top:8px">
+              <select id="wrC1"></select>
+              <label class="hint" for="wrC2">y</label>
+              <select id="wrC2"></select>
+              <button id="btnWrSave">Grabar color</button>
+              <button class="ghost" id="btnWrCancel">Cancelar</button>
+            </div>
+          </details>
+        </div>
+
+        <div id="mineBox">
+          <h3>Mis colores</h3>
+          <div class="swatches" id="mySw"></div>
+          <details class="box recbox" id="mixRec">
+            <summary><b>Mezclar y grabar un color</b></summary>
+            <div class="slider"><label for="mixR">Rojo</label><input type="range" id="mixR" min="0" max="1" step="0.005" data-mix="r"><output></output></div>
+            <div class="slider"><label for="mixG">Verde</label><input type="range" id="mixG" min="0" max="1" step="0.005" data-mix="g"><output></output></div>
+            <div class="slider"><label for="mixB">Azul</label><input type="range" id="mixB" min="0" max="1" step="0.005" data-mix="b"><output></output></div>
+            <div class="slider"><label for="mixW">Blanco</label><input type="range" id="mixW" min="0" max="1" step="0.005" data-mix="w"><output></output></div>
+            <div class="row" style="margin-top:8px">
+              <label class="hint" for="customColor">o elegilo acá</label>
+              <input type="color" id="customColor" value="#ff00aa">
+              <input type="text" id="mixName" placeholder="Nombre (ej. Lila suave)" class="grow">
+              <button id="btnMixSave">Grabar color</button>
+            </div>
+          </details>
+        </div>
+
         <div class="row" style="margin-top:12px">
-          <label class="hint" for="customColor">Color a medida</label>
-          <input type="color" id="customColor" value="#ff00aa">
           <span class="grow"></span>
-          <button id="btnLocate" class="ghost" title="Prende la selección en blanco, a full y centrada">Ubicar</button>
+          <button id="btnLocate" class="ghost" title="Prende la selección en blanco, a full y al frente">Ubicar</button>
           <button id="btnOff" class="ghost">Apagar selección</button>
         </div>
       </div>
@@ -210,7 +251,7 @@
       <p class="hint">Cada equipo escucha a partir de su dirección DMX. Tiene que coincidir con la que configuraste en el display del equipo (por ejemplo d001), y el equipo tiene que estar en el mismo modo de canales que su perfil (por ejemplo 12CH). Si el equipo usa más canales que el perfil, sus últimos canales se pisan con el equipo de al lado: es una causa típica de reseteos solos.</p>
       <div id="conflicts"></div>
       <table>
-        <thead><tr><th></th><th>Nombre</th><th>Tipo</th><th>Dirección</th><th>Canales</th><th>Invertir</th><th></th></tr></thead>
+        <thead><tr><th></th><th>Nombre</th><th>Tipo</th><th>Dibujo</th><th>Dirección</th><th>Canales</th><th>Invertir</th><th></th></tr></thead>
         <tbody id="patchRows"></tbody>
       </table>
       <div class="dmxbar" id="dmxbar" title="Uso del universo DMX (512 canales)"></div>

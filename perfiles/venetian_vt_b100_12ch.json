@@ -107,40 +107,32 @@
       "dmx": 0
     },
     {
-      "nombre": "Gobo 1",
+      "nombre": "Círculo",
       "dmx": 12
     },
     {
-      "nombre": "Gobo 2",
-      "dmx": 20
+      "nombre": "Serpiente",
+      "dmx": 22
     },
     {
-      "nombre": "Gobo 3",
-      "dmx": 28
+      "nombre": "Cruz",
+      "dmx": 32
     },
     {
-      "nombre": "Gobo 4",
-      "dmx": 36
+      "nombre": "Margarita",
+      "dmx": 42
     },
     {
-      "nombre": "Gobo 5",
-      "dmx": 44
-    },
-    {
-      "nombre": "Gobo 6",
+      "nombre": "Estrella",
       "dmx": 52
     },
     {
-      "nombre": "Gobo 7",
-      "dmx": 60
+      "nombre": "Espiral",
+      "dmx": 62
     },
     {
-      "nombre": "Gobo 8",
-      "dmx": 68
-    },
-    {
-      "nombre": "Gobo 9",
-      "dmx": 76
+      "nombre": "Flor",
+      "dmx": 72
     }
   ],
   "prism": [
@@ -156,5 +148,6 @@
   "prism_rot": {
     "min": 145,
     "max": 255
-  }
+  },
+  "icono": "beam"
 }

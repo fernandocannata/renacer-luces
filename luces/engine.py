@@ -908,6 +908,8 @@ class Engine:
             for k in ("invert_pan", "invert_tilt"):
                 if k in kw:
                     f[k] = bool(kw[k])
+            if "icono" in kw:
+                f["icono"] = str(kw["icono"])[:20] if kw["icono"] else None
             if "profile" in kw and self.lib.get(kw["profile"]):
                 f["profile"] = kw["profile"]
                 self.look[fid] = default_look(self.lib.get(kw["profile"]))

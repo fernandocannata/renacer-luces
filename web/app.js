@@ -175,6 +175,59 @@ function renderOut(o) {
   if (det) det.textContent = o.label + (o.connected ? ` — enviando ${Math.round(o.fps || 0)} cuadros por segundo.` : '') + (o.error ? ' ' + o.error : '');
 }
 
+/* ------------------------------------------------------------ pestaña color */
+const PAL_NOT_FOR_MOVERS = ['Rosa', 'Violeta', 'Cálido'];
+const slotBg = (s) => (s.hex2 ? `linear-gradient(90deg, ${s.hex} 50%, ${s.hex2} 50%)` : (s.hex || '#ffffff'));
+const rgbwHex = ([r, g, b, w]) => '#' + [r, g, b].map((v) => Math.round(Math.min(1, v + w) * 255).toString(16).padStart(2, '0')).join('');
+function colorContext(ids) {
+  const wheel = ids.filter((i) => capsOf(i).has('cw') && !capsOf(i).has('rgb'));
+  const rgb = ids.filter((i) => capsOf(i).has('rgb'));
+  return { wheel, rgb, onlyWheel: ids.length > 0 && wheel.length === ids.length, onlyRgb: ids.length > 0 && rgb.length === ids.length };
+}
+function renderColorTab(ids) {
+  const cx = colorContext(ids);
+  // paleta general: no se muestra si solo hay móviles; sin rosa/violeta/cálido si hay alguno
+  $('#palBox').style.display = cx.onlyWheel ? 'none' : '';
+  if (changed('pal', [cx.wheel.length > 0])) {
+    $('#palette').innerHTML = INIT.palette.map((c, i) => (cx.wheel.length && PAL_NOT_FOR_MOVERS.includes(c.nombre)) ? ''
+      : `<button class="swatch" style="--sw:${c.hex}" data-pal="${i}"><span>${esc(c.nombre)}</span></button>`).join('');
+  }
+  // colores de la rueda (los del equipo, con medios colores)
+  $('#wheelBox').style.display = cx.onlyWheel ? '' : 'none';
+  if (cx.onlyWheel) {
+    const f = fx(cx.wheel[0]), slots = PROF[f.profile]?.color_wheel || [];
+    const cur = lookOf(cx.wheel[0]).cw;
+    if (changed('wheelSw', [f.profile, slots, cur])) {
+      $('#wheelSw').innerHTML = slots.length ? slots.map((sl, i) => `<button class="swatch ${i === cur ? 'cur' : ''}" style="--sw:${slotBg(sl)}" data-wslot="${i}"><span>${esc(sl.nombre)}</span></button>`).join('')
+        : '<p class="hint">Todavía no hay colores grabados. Abrí “Grabar un color de la rueda”.</p>';
+    }
+  }
+  // mis colores (equipos con LED de color)
+  $('#mineBox').style.display = cx.onlyRgb ? '' : 'none';
+  const mine = (S.app_settings && S.app_settings.colores_propios) || [];
+  if (changed('mySw', mine)) {
+    $('#mySw').innerHTML = mine.length ? mine.map((m, i) => `<span class="swatch" style="--sw:${rgbwHex(m.rgbw)}" role="button" tabindex="0" data-mine="${i}">
+        <span>${esc(m.nombre)}</span><button class="del" data-minedel="${i}" title="Borrar este color" aria-label="Borrar ${esc(m.nombre)}">✕</button></span>`).join('')
+      : '<p class="hint">Mezclá un color abajo y grabalo: queda acá para todos tus shows.</p>';
+  }
+  if (cx.onlyRgb) {
+    const v = lookOf(cx.rgb[0]);
+    for (const k of ['r', 'g', 'b', 'w']) {
+      const el = $(`[data-mix=${k}]`);
+      if (!el) continue;
+      el.disabled = v[k] == null;
+      setVal(el, v[k] ?? 0);
+      el.parentElement.querySelector('output').textContent = v[k] == null ? '—' : pct(v[k]);
+    }
+  }
+}
+function wheelAddrs(ids) {
+  return ids.map((i) => { const f = fx(i), p = PROF[f.profile]; const k = p.canales.findIndex((c) => c.attr === 'color_wheel'); return k < 0 ? null : f.address + k; }).filter((a) => a != null);
+}
+function releaseWheelTest() {
+  for (const a of wheelAddrs(colorContext(selIds()).wheel)) api('test_set', { address: a, value: null });
+}
+
 /* ------------------------------------------------------------ tempo desde VirtualDJ */
 function renderSync(sy) {
   const b = $('#btnSync');
@@ -207,21 +260,41 @@ function renderStrobe2() {
 }
 
 /* ------------------------------------------------------------ equipos */
+/* modelos de dibujo para el escenario (elegibles por equipo en "Equipos y direcciones") */
+const ICONS = {
+  beam: { label: 'Cabezal beam', mover: true, lens: 28, spread: 0.14 },
+  spot: { label: 'Cabezal spot', mover: true, lens: 27, spread: 0.22 },
+  wash: { label: 'Cabezal wash', mover: true, lens: 27, spread: 0.42 },
+  slim: { label: 'Par LED plano (tipo Nebula)', lens: 21, spread: 0.58 },
+  tacho: { label: 'Tacho par', lens: 22, spread: 0.45 },
+  barra: { label: 'Barra LED', lens: 16, spread: 0.95 },
+  strobo: { label: 'Strobo', lens: 15, spread: 0.95 },
+  humo: { label: 'Máquina de humo', lens: 22, spread: 0 },
+};
+const RIG_ORDER = ['par', 'strobo', 'dimmer', 'cabezal'];  // de arriba hacia abajo
+function iconOf(f) {
+  const p = PROF[f.profile] || {}, mover = capsOf(f.id).has('mover'), t = typeOf(f.id);
+  const ic = f.icono || p.icono;
+  if (ic && ICONS[ic] && !!ICONS[ic].mover === mover) return ic;
+  return mover ? 'beam' : t === 'strobo' ? 'strobo' : t === 'humo' ? 'humo' : 'tacho';
+}
+
 function renderTiles() {
-  const sig = fixtures().map((f) => [f.id, f.name, f.profile]);
+  const sig = fixtures().map((f) => [f.id, f.name, f.profile, f.icono, PROF[f.profile]?.icono]);
   if (changed('tiles', sig)) {
     const groups = {};
     for (const f of fixtures()) (groups[typeOf(f.id)] ||= []).push(f);
-    const types = Object.keys(groups).sort((a, b) => TYPE_ORDER.indexOf(a) - TYPE_ORDER.indexOf(b));
-    const rigTypes = types.filter((t) => t !== 'humo');
+    const order = (t) => (RIG_ORDER.includes(t) ? RIG_ORDER.indexOf(t) : RIG_ORDER.length - 1.5);
+    const rigTypes = Object.keys(groups).filter((t) => t !== 'humo').sort((a, b) => order(a) - order(b));
     const tileHtml = (f, i) => {
-      const t = typeOf(f.id), mover = capsOf(f.id).has('mover');
-      return `<button class="tile t-${t} ${mover ? 'mover' : ''}" data-id="${f.id}" title="${esc(f.name)} — dirección ${f.address}">
-          <span class="beam"></span>${fixtureSvg(t, mover)}<span class="nm">${i + 1}</span></button>`;
+      const t = typeOf(f.id), ic = iconOf(f), info = ICONS[ic];
+      return `<button class="tile t-${t} i-${ic} ${info.mover ? 'mover' : ''}" data-id="${f.id}" title="${esc(f.name)} — dirección ${f.address}"
+          style="--by:${(info.lens / 40 * 46).toFixed(1)}px;--spread:${info.spread}">
+          <span class="beam"></span>${fixtureSvg(ic)}<span class="nm">${i + 1}</span></button>`;
     };
-    $('#tileGroups').innerHTML = types.length ? `
+    $('#tileGroups').innerHTML = Object.keys(groups).length ? `
       <div class="stage">
-        <div class="haze"></div><div class="valance"></div><div class="leg l"></div><div class="leg r"></div>
+        <div class="haze"></div>
         ${rigTypes.map((t) => `<div class="rig"><div class="truss"><span class="tag">${esc(TYPE_LABEL[t] || t)}</span></div>
             <div class="fixrow">${groups[t].map(tileHtml).join('')}</div></div>`).join('')}
         <div class="apron">${groups.humo ? `<div class="rig floor-rig"><div class="fixrow">${groups.humo.map(tileHtml).join('')}</div></div>` : ''}</div>
@@ -239,16 +312,30 @@ function renderTiles() {
   paintSelection();
 }
 
-/* dibujo de cada equipo colgado en la vara */
-function fixtureSvg(type, mover) {
-  const clamp = '<rect x="17" y="0" width="6" height="5" rx="1" class="clamp"/>';
+/* dibujo de cada modelo, de frente, colgado del truss (viewBox 40×40) */
+function fixtureSvg(ic) {
+  const clamp = '<rect x="16.5" y="0" width="7" height="3.5" rx="1" class="clamp"/>';
+  const base = clamp + '<rect x="8" y="3" width="24" height="8" rx="3" class="metal"/><path d="M12 6h16M12 8h16" class="vent"/>';
+  const arms = '<rect x="7.5" y="10" width="4" height="18" rx="1.6" class="metal"/><rect x="28.5" y="10" width="4" height="18" rx="1.6" class="metal"/>';
+  const bracket = clamp + '<rect x="5" y="3" width="30" height="2.6" rx="1" class="metal"/><rect x="5" y="3" width="2.6" height="22" rx="1" class="metal"/><rect x="32.4" y="3" width="2.6" height="22" rx="1" class="metal"/>';
   let g;
-  if (mover) g = clamp + '<path d="M7 5h26v19a4 4 0 0 1-4 4h-2V12H13v16h-2a4 4 0 0 1-4-4z" class="metal"/>'
-    + '<rect x="12.5" y="10" width="15" height="21" rx="5" class="metal2"/><ellipse cx="20" cy="31" rx="5.5" ry="2.6" class="lens"/>';
-  else if (type === 'strobo') g = clamp + '<rect x="3" y="6" width="34" height="15" rx="3" class="metal2"/><rect x="6" y="15" width="28" height="6" rx="2" class="lens"/>';
-  else if (type === 'humo') g = '<rect x="3" y="12" width="30" height="18" rx="3" class="metal2"/><rect x="33" y="18" width="5" height="6" rx="1" class="metal"/><circle cx="12" cy="21" r="3" class="lens"/>';
-  else g = clamp + '<path d="M11 5h18l3 22H8z" class="metal2"/><ellipse cx="20" cy="27.5" rx="12.5" ry="3.6" class="lens"/>';
-  return `<svg class="body" viewBox="0 0 40 34" aria-hidden="true">${g}</svg>`;
+  if (ic === 'beam') g = base + arms + '<circle cx="20" cy="27" r="9.5" class="metal2"/><circle cx="20" cy="28" r="6.6" class="ring"/><circle cx="20" cy="28" r="5.4" class="lens"/>';
+  else if (ic === 'spot') g = base + arms + '<rect x="12" y="15" width="16" height="20" rx="4" class="metal2"/><circle cx="20" cy="27" r="5.2" class="ring"/><circle cx="20" cy="27" r="4.2" class="lens"/>';
+  else if (ic === 'wash') g = base + arms + '<circle cx="20" cy="26" r="10.5" class="metal2"/>'
+    + [[20, 26], [15.5, 23.4], [24.5, 23.4], [15.5, 28.6], [24.5, 28.6], [20, 20.8], [20, 31.2]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="2.3" class="lens"/>`).join('');
+  else if (ic === 'slim') {
+    const dots = [];
+    [[4, 13.5], [3, 18.5], [4, 23.5], [3, 28.5]].forEach(([n, y]) => {
+      for (let i = 0; i < n; i++) dots.push([n === 4 ? 12.3 + i * 5.13 : 14.9 + i * 5.13, y]);
+    });
+    g = bracket + '<rect x="8.5" y="8.5" width="23" height="24.5" rx="3" class="metal2"/>'
+      + dots.map(([x, y]) => `<circle cx="${x.toFixed(2)}" cy="${y}" r="2.05" class="lens"/>`).join('');
+  } else if (ic === 'tacho') g = bracket + '<circle cx="20" cy="22" r="12" class="metal2"/><circle cx="20" cy="22" r="9.4" class="ring"/><circle cx="20" cy="22" r="8.2" class="lens"/>';
+  else if (ic === 'barra') g = clamp + '<rect x="1.5" y="10" width="37" height="11" rx="2" class="metal2"/>'
+    + Array.from({ length: 8 }, (_, i) => `<circle cx="${5.6 + i * 4.11}" cy="15.5" r="1.7" class="lens"/>`).join('');
+  else if (ic === 'strobo') g = clamp + '<rect x="2.5" y="5" width="35" height="17" rx="3" class="metal2"/><rect x="5.5" y="11" width="29" height="7" rx="3.5" class="lens"/>';
+  else g = '<rect x="3" y="14" width="29" height="17" rx="3" class="metal2"/><rect x="32" y="19" width="5" height="6" rx="1" class="metal"/><circle cx="11" cy="22.5" r="3" class="lens"/>';
+  return `<svg class="body" viewBox="0 0 40 40" aria-hidden="true">${g}</svg>`;
 }
 
 /* largo de cada haz: desde la lente hasta el piso del escenario */
@@ -258,7 +345,7 @@ function layoutBeams() {
   const floor = st.querySelector('.apron').getBoundingClientRect().top + 64;
   for (const t of $$('.tile', st)) {
     const r = t.getBoundingClientRect();
-    t.style.setProperty('--len', Math.max(40, floor - r.top - 30) + 'px');
+    t.style.setProperty('--len', Math.max(40, floor - r.top - 40) + 'px');
   }
 }
 window.addEventListener('resize', () => layoutBeams());
@@ -340,6 +427,7 @@ function renderProgrammer() {
   const av = availability(ids);
   renderTabs(ids, av);
   renderFxPresets(ids, av);
+  renderColorTab(ids, av);
   $('#noSel').style.display = ids.length ? 'none' : '';
   const dim = firstVal('dim', 'dim');
   setVal($('#dim'), dim ?? 0);
@@ -381,7 +469,7 @@ function renderSlots(sel_, cap, key, swatch = false) {
   const slots = first ? (PROF[fx(first).profile][key] || []) : [];
   const cur = first ? lookOf(first)[cap] : -1;
   $(sel_).innerHTML = slots.map((s, i) => `<button class="${i === cur ? 'on' : 'ghost'}" data-slot="${cap}" data-i="${i}">
-     ${swatch ? `<span class="chip" style="background:${esc(s.hex || '#fff')}"></span>` : ''}${esc(s.nombre)}</button>`).join('');
+     ${swatch ? `<span class="chip" style="background:${slotBg(s)}"></span>` : ''}${esc(s.nombre)}</button>`).join('');
 }
 
 /* XY pad */
@@ -581,7 +669,7 @@ function renderPatch() {
       ${ps.map((p) => `<option value="${p.id}">${esc(p.nombre)}${p.origen === 'usuario' ? ' (propio)' : ''}</option>`).join('')}</optgroup>`).join('');
     updateAddNote();
   }
-  if (!changed('patch', [S.fixtures, S.conflicts, Object.keys(PROF)])) return;
+  if (!changed('patch', [S.fixtures, S.conflicts, Object.keys(PROF), Object.values(PROF).map((p) => p.icono)])) return;
   const conf = S.conflicts.map((g) => g.map((i) => fx(i)?.name).join(' y '));
   $('#conflicts').innerHTML = conf.length ? `<div class="box errbox">Hay equipos que se pisan: ${esc(conf.join('; '))}. Cambiá una de las direcciones.</div>` : '';
   $('#patchRows').innerHTML = fixtures().map((f) => {
@@ -590,12 +678,14 @@ function renderPatch() {
       <td><div class="row" style="gap:2px;flex-wrap:nowrap"><button class="ghost small" data-fmv="${f.id}" data-d="-1" title="Subir">▲</button><button class="ghost small" data-fmv="${f.id}" data-d="1" title="Bajar">▼</button></div></td>
       <td><input type="text" value="${esc(f.name)}" data-fix="${f.id}" data-k="name"></td>
       <td>${esc(p ? p.nombre : 'Perfil faltante: ' + f.profile)}${p && !p.verificado ? ' <span style="color:var(--warn)">(a verificar)</span>' : ''}</td>
+      <td><select data-fix="${f.id}" data-k="icono" aria-label="Dibujo en el escenario">${Object.entries(ICONS).filter(([, v]) => !!v.mover === mover)
+        .map(([k, v]) => `<option value="${k}" ${iconOf(f) === k ? 'selected' : ''}>${esc(v.label)}</option>`).join('')}</select></td>
       <td><input type="number" min="1" max="512" value="${f.address}" data-fix="${f.id}" data-k="address"></td>
       <td class="addr">${f.address}–${f.address + n - 1}</td>
       <td>${mover ? `<label class="hint"><input type="checkbox" data-fix="${f.id}" data-k="invert_pan" ${f.invert_pan ? 'checked' : ''}> pan</label>
                      <label class="hint"><input type="checkbox" data-fix="${f.id}" data-k="invert_tilt" ${f.invert_tilt ? 'checked' : ''}> tilt</label>` : ''}</td>
       <td><button class="ghost small danger" data-fdel="${f.id}">Quitar</button></td></tr>`;
-  }).join('') || '<tr><td colspan="7" class="hint">No hay equipos en este show.</td></tr>';
+  }).join('') || '<tr><td colspan="8" class="hint">No hay equipos en este show.</td></tr>';
   const use = new Array(513).fill(0);
   for (const f of fixtures()) { const n = PROF[f.profile]?.canales.length || 1; for (let a = f.address; a < f.address + n && a <= 512; a++) use[a]++; }
   $('#dmxbar').innerHTML = use.slice(1).map((u) => `<i class="${u > 1 ? 'x' : u ? 'u' : ''}"></i>`).join('');
@@ -663,6 +753,7 @@ function buildProbar() {
     const v = S.test[addr] ?? (draft[key]?.[0]?.dmx || 0);
     const names = key === 'color_wheel'
       ? WHEEL_COLORS.map(([n, h]) => `<button class="small ghost" data-wname="${esc(n)}" data-whex="${h}"><span class="chip" style="background:${h}"></span>${esc(n)}</button>`).join('')
+        + `<label class="hint row" style="gap:6px;width:100%;margin-top:4px">Si es mitad y mitad, el otro color: <select data-whalf><option value="">— color entero —</option>${WHEEL_COLORS.map(([n, h]) => `<option value="${esc(n)}" data-hex="${h}">${esc(n)}</option>`).join('')}</select></label>`
       : `<button class="small ghost" data-wname="Abierto">Abierto (sin ${key === 'gobo' ? 'gobo' : 'prisma'})</button><button class="small" data-wname="*">Agregar ${key === 'gobo' ? 'gobo' : 'prisma'} en este valor</button>`;
     return `<div class="box wcal" data-wcal="${key}" data-addr="${addr}">
       <h2>${title}: encontrar cada posición</h2>
@@ -709,14 +800,14 @@ const WHEEL_COLORS = [
   ['Violeta', '#8a3dff'], ['Lavanda', '#b9a2ff'], ['Magenta', '#ff2ae6'], ['Rosa', '#ff5fc8'], ['Cálido', '#ffd29a'],
 ];
 function wheelText(key) {
-  return (draft[key] || []).map((s) => key === 'color_wheel' ? `${s.nombre} = ${s.dmx} = ${s.hex || '#ffffff'}` : `${s.nombre} = ${s.dmx}`).join('\n');
+  return (draft[key] || []).map((s) => key === 'color_wheel' ? `${s.nombre} = ${s.dmx} = ${s.hex || '#ffffff'}${s.hex2 ? ' = ' + s.hex2 : ''}` : `${s.nombre} = ${s.dmx}`).join('\n');
 }
 function syncWheel(key) {
   const box = $(`[data-wcal="${key}"]`); if (!box) return;
   const list = (draft[key] || []).slice().sort((a, b) => a.dmx - b.dmx);
   draft[key] = list;
   $('[data-wlist]', box).innerHTML = list.length ? list.map((s, i) => `<span class="wchip" data-wjump="${s.dmx}">
-      ${s.hex ? `<span class="chip" style="background:${esc(s.hex)}"></span>` : ''}${esc(s.nombre)} <b>${s.dmx}</b>
+      ${s.hex ? `<span class="chip" style="background:${slotBg(s)}"></span>` : ''}${esc(s.nombre)} <b>${s.dmx}</b>
       <button class="small ghost" data-wdel="${i}" title="Quitar">✕</button></span>`).join('')
     : '<span class="hint">Todavía ninguna.</span>';
   $('[data-wheel]', box).value = wheelText(key);
@@ -726,6 +817,7 @@ function parseWheel(text, withHex) {
     const parts = l.split('=').map((x) => x.trim());
     const o = { nombre: parts[0] || 'Posición', dmx: Math.max(0, Math.min(255, parseInt(parts[1], 10) || 0)) };
     if (withHex) o.hex = /^#[0-9a-f]{6}$/i.test(parts[2] || '') ? parts[2] : '#ffffff';
+    if (withHex && /^#[0-9a-f]{6}$/i.test(parts[3] || '')) o.hex2 = parts[3];
     return o;
   });
 }
@@ -765,7 +857,7 @@ function renderShow() {
 function buildStatic() {
   $('#appVersion').textContent = `Versión ${INIT.app.version} (compilación ${INIT.app.build || 'dev'})`;
   $('#brand').title = $('#appVersion').textContent;
-  $('#palette').innerHTML = INIT.palette.map((c, i) => `<button class="swatch" style="--sw:${c.hex}" data-pal="${i}"><span>${esc(c.nombre)}</span></button>`).join('');
+
 
   // pestañas
   for (const b of $$('#tabs button')) b.onclick = () => {
@@ -824,6 +916,72 @@ function buildStatic() {
   for (const b of $$('[data-dim]')) b.onclick = () => needSel() && api('set_attrs', { ids: selIds(), attrs: { dim: +b.dataset.dim } });
   $('#palette').addEventListener('click', (e) => { const b = e.target.closest('[data-pal]'); if (b && needSel()) api('set_color', { ids: selIds(), rgbw: INIT.palette[+b.dataset.pal].rgbw }); });
   $('#customColor').oninput = (e) => { if (needSel()) sendLatest('color', 'set_color', { ids: selIds(), rgbw: [...hexToRgb(e.target.value), 0] }); };
+
+  // colores de la rueda de los móviles
+  $('#wheelSw').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-wslot]'); if (!b) return;
+    const ids = colorContext(selIds()).wheel;
+    api('set_wheel', { ids, key: 'cw', index: +b.dataset.wslot });
+    if ((firstVal('dim', 'dim') ?? 0) === 0) api('set_attrs', { ids, attrs: { dim: 1 } });
+  });
+  const opts = (first) => (first ? `<option value="">— color entero —</option>` : '') + WHEEL_COLORS.map(([n, h]) => `<option value="${esc(n)}" data-hex="${h}">${esc(n)}</option>`).join('');
+  $('#wrC1').innerHTML = opts(false); $('#wrC2').innerHTML = opts(true);
+  const wrSet = (v) => {
+    v = Math.max(0, Math.min(255, Math.round(v)));
+    $('#wrVal').value = v; $('#wrOut').textContent = v;
+    for (const a of wheelAddrs(colorContext(selIds()).wheel)) sendLatest('wr' + a, 'test_set', { address: a, value: v });
+  };
+  $('#wheelRec').addEventListener('toggle', () => {
+    const ids = colorContext(selIds()).wheel;
+    if ($('#wheelRec').open) {
+      if (!ids.length) { $('#wheelRec').open = false; return; }
+      if ((firstVal('dim', 'dim') ?? 0) === 0) api('set_attrs', { ids, attrs: { dim: 1 } });
+      const slots = PROF[fx(ids[0]).profile]?.color_wheel || [];
+      wrSet(slots[lookOf(ids[0]).cw]?.dmx || 0);
+    } else releaseWheelTest();
+  });
+  $('#wrVal').oninput = (e) => wrSet(+e.target.value);
+  $('#wheelRec').addEventListener('click', (e) => { const b = e.target.closest('[data-wrstep]'); if (b) wrSet(+$('#wrVal').value + +b.dataset.wrstep); });
+  $('#btnWrCancel').onclick = () => { $('#wheelRec').open = false; };
+  $('#btnWrSave').onclick = async () => {
+    const ids = colorContext(selIds()).wheel; if (!ids.length) return;
+    const c1 = $('#wrC1').selectedOptions[0], c2 = $('#wrC2').selectedOptions[0];
+    const entry = { nombre: c1.value, dmx: +$('#wrVal').value, hex: c1.dataset.hex };
+    if (c2 && c2.value) { entry.nombre = `${c1.value} / ${c2.value}`; entry.hex2 = c2.dataset.hex; }
+    for (const pid of [...new Set(ids.map((i) => fx(i).profile))]) {
+      const data = JSON.parse(JSON.stringify(PROF[pid])); delete data.caps; delete data.id; delete data.origen;
+      data.color_wheel = (data.color_wheel || []).filter((x) => x.nombre !== entry.nombre && x.dmx !== entry.dmx).concat([entry]).sort((a, b) => a.dmx - b.dmx);
+      await api('profile_save', { id: pid, data });
+    }
+    await refreshProfiles();
+    $('#wheelRec').open = false;
+    const idx = (PROF[fx(ids[0]).profile].color_wheel || []).findIndex((x) => x.nombre === entry.nombre);
+    if (idx >= 0) api('set_wheel', { ids, key: 'cw', index: idx });
+    toast(`${entry.nombre} grabado en ${entry.dmx}`);
+  };
+
+  // mis colores (LED)
+  $('#mySw').addEventListener('click', (e) => {
+    const del = e.target.closest('[data-minedel]');
+    if (del) { e.stopPropagation(); if (confirm('¿Borrar este color?')) api('color_delete', { index: +del.dataset.minedel }); return; }
+    const b = e.target.closest('[data-mine]'); if (!b || !needSel()) return;
+    api('set_color', { ids: selIds(), rgbw: S.app_settings.colores_propios[+b.dataset.mine].rgbw });
+  });
+  $('#mySw').addEventListener('keydown', (e) => { const b = e.target.closest('[data-mine]'); if (b && e.key === 'Enter') b.click(); });
+  $('#mixRec').addEventListener('input', (e) => {
+    const k = e.target.dataset.mix; if (!k) return;
+    const ids = colorContext(selIds()).rgb; if (!ids.length) return;
+    e.target.parentElement.querySelector('output').textContent = pct(+e.target.value);
+    sendLatest('mix' + k, 'set_attrs', { ids, attrs: { [k]: +e.target.value } });
+    if ((firstVal('dim', 'dim') ?? 0) === 0) sendLatest('mixdim', 'set_attrs', { ids, attrs: { dim: 1 } });
+  });
+  $('#btnMixSave').onclick = async () => {
+    const ids = colorContext(selIds()).rgb; if (!ids.length) return;
+    const v = lookOf(ids[0]);
+    const name = $('#mixName').value.trim() || prompt('Nombre del color', 'Mi color');
+    if (!name) return;
+    if (await api('color_save', { name, rgbw: [v.r || 0, v.g || 0, v.b || 0, v.w || 0] })) { $('#mixName').value = ''; toast(`“${name}” grabado en Mis colores`); }
+  };
   $('#btnLocate').onclick = () => needSel() && api('locate', { ids: selIds() });
   $('#btnOff').onclick = () => needSel() && api('clear', { ids: selIds() });
 
@@ -1076,7 +1234,11 @@ function buildStatic() {
       let name = b.dataset.wname;
       if (name === '*') name = (key === 'gobo' ? 'Gobo ' : 'Prisma ') + (list.filter((x) => x.nombre !== 'Abierto').length + 1);
       const entry = { nombre: name, dmx: cur };
-      if (key === 'color_wheel') entry.hex = b.dataset.whex;
+      if (key === 'color_wheel') {
+        entry.hex = b.dataset.whex;
+        const half = $('[data-whalf]', box)?.selectedOptions[0];
+        if (half && half.value) { entry.nombre = `${name} / ${half.value}`; entry.hex2 = half.dataset.hex; name = entry.nombre; $('[data-whalf]', box).value = ''; }
+      }
       const same = list.findIndex((x) => x.nombre === name);
       if (same >= 0) list[same] = entry; else list.push(entry);
       syncWheel(key);

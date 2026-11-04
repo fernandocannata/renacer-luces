@@ -56,6 +56,17 @@ def shape(kind, p, u, seed=""):
         return s, 0.55 * s * s - 0.2
     if kind == "cuadrado":
         return _square(p)
+    if kind == "recorrido":  # gran paneo: de costado a costado pasando por todas las alturas
+        return math.sin(th), 0.9 * math.sin(3 * th)
+    if kind == "espiral":  # se abre y se cierra girando
+        r = 0.2 + 0.8 * (0.5 - 0.5 * math.cos(th))
+        return r * math.cos(6 * th), r * math.sin(6 * th)
+    if kind == "zigzag":
+        tri = 2 / math.pi * math.asin(math.sin(4 * th))
+        return math.sin(th), tri
+    if kind == "pelota":  # cruza de lado a lado rebotando
+        tri = 2 / math.pi * math.asin(math.sin(th))
+        return tri, 1.6 * abs(math.sin(4 * th)) - 0.8
     if kind == "aleatorio":
         c = math.floor(p)
         a, b = _rand_point(seed, c), _rand_point(seed, c + 1)
@@ -68,6 +79,7 @@ SHAPES = {
     "circulo": "Círculo", "ocho": "Ocho", "ocho_v": "Ocho parado", "barrido": "Barrido lateral",
     "vertical": "Arriba y abajo", "tijera": "Tijera", "abanico": "Abanico", "pendulo": "Péndulo",
     "cuadrado": "Cuadrado", "aleatorio": "Búsqueda al azar",
+    "recorrido": "Gran paneo", "espiral": "Espiral", "zigzag": "Zigzag", "pelota": "Pelota",
 }
 
 # Parámetros de un movimiento frontal (además de velocidad, desfase e invertir)
@@ -92,6 +104,11 @@ PRESETS = [
     ("pendulo", "Péndulo", "pendulo", {"size": 0.8, "beats": 4}),
     ("cuadrado", "Cuadrado", "cuadrado", {"size": 0.5}),
     ("busqueda", "Búsqueda al azar", "aleatorio", {"size": 0.8, "beats": 2}),
+    ("gran_paneo", "Gran paneo (recepción)", "recorrido", {"size": 1.0, "beats": 32, "spread": 0.12}),
+    ("paneo_sala", "Paneo lento de sala", "barrido", {"size": 1.0, "beats": 32, "spread": 0.15, "altura": -0.15}),
+    ("espiral", "Espiral", "espiral", {"size": 0.7, "beats": 16}),
+    ("zigzag", "Zigzag", "zigzag", {"size": 0.8, "beats": 16}),
+    ("pelota", "Pelota", "pelota", {"size": 0.8, "beats": 8, "spread": 0.25}),
 ]
 
 # Posiciones fijas: función del lugar en la barra (u) -> (x, y)
