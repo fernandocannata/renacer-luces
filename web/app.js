@@ -509,7 +509,7 @@ function fxCard(f) {
     ? `<div class="slider"><label>Una vuelta cada</label><select data-fx="${f.id}" data-k="beats">${[1, 2, 4, 8, 16, 32].map((b) => `<option value="${b}" ${+f.beats === b ? 'selected' : ''}>${b} tiempo${b > 1 ? 's' : ''}</option>`).join('')}</select><output></output></div>`
     : `<div class="slider"><label>Velocidad</label><input type="range" min="0.02" max="4" step="0.01" value="${f.hz}" data-fx="${f.id}" data-k="hz"><output>${(+f.hz).toFixed(2)}/s</output></div>`;
   const sizeLabel = (INIT.size_labels || {})[f.type] || FX_SIZE_LABEL[f.type];
-  const size = front ? fxSlider(f, 'size', 'Tamaño', 0, 1) : sizeLabel ? fxSlider(f, 'size', sizeLabel, 0, 1) : '';
+  const size = front ? fxSlider(f, 'size', sizeLabel || 'Tamaño', 0, 1) : sizeLabel ? fxSlider(f, 'size', sizeLabel, 0, 1) : '';
   const frontExtra = front ? fxSlider(f, 'altura', 'Altura', -1, 1, 'signed')
     + fxSlider(f, 'apertura', 'Apertura', -1, 1, 'signed') + fxSlider(f, 'escalon', 'Escalón', -1, 1, 'signed') : '';
   const many = f.type === 'colores';

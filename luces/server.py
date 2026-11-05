@@ -213,7 +213,7 @@ class App:
             "fx_types": {k: {"family": v[0], "name": v[1]} for k, v in FX_TYPES.items()},
             "frontal": frontal.catalog(),
             "efectos": efectos.catalog(),
-            "size_labels": efectos.SIZE_LABEL,
+            "size_labels": {**efectos.SIZE_LABEL, "f_canon": "Recorrido"},
             "channel_attrs": CHANNEL_ATTRS,
             "shows": self.storage.list_shows(),
             "settings": self.storage.settings,

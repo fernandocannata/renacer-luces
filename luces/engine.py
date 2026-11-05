@@ -342,6 +342,22 @@ class Engine:
         return (self._axis_inv(fp, pan, float(r["span_x"]), pdeg, r.get("flip_x")),
                 self._axis_inv(ft, tilt, float(r["span_y"]), tdeg, r.get("flip_y")))
 
+    def _canon_tilt(self, fid, fx, k, n, phase):
+        """Barrido vertical en canon: en grados reales, desde lo más alto que da el
+        cabezal (sin pasar de 90° sobre el frente) hacia abajo. No toca el pan."""
+        r = self.rig()
+        ft = r["front"].get(fid, [0.5, 0.5])[1]
+        tdeg = self._degrees(fid)[1]
+        flip = r.get("flip_y")
+        up_room, down_room = self._rooms(ft, tdeg, flip)
+        top = min(up_room - 2.0, frontal.CANON_TOP_MAX)
+        top = max(-down_room, top + min(float(fx.get("altura", 0.0)), 0.0) * 45.0)  # Altura en menos: arranca más abajo
+        rng = max(0.0, min(1.0, float(fx.get("size", 0.9)))) * frontal.CANON_DEG
+        order = (n - 1 - k) if fx.get("reverse") else k
+        p = phase - float(fx.get("spread", 0.0)) * order / max(n, 1)
+        deg = max(-down_room, top - rng * frontal.canon_s(p))
+        return clamp(ft + (-1.0 if flip else 1.0) * deg / tdeg)
+
     def nudge(self, ids, dpan_deg=0.0, dtilt_deg=0.0):
         """Ajuste fino en grados (para apuntar con precisión)."""
         with self.lock:
@@ -547,6 +563,9 @@ class Engine:
             if t.startswith("f_"):
                 fids = [i for i in self.movers() if i in set(ids)]
                 for k, fid in enumerate(fids):
+                    if t == "f_canon":
+                        cur[fid]["tilt"] = self._canon_tilt(fid, fx, k, len(fids), ph)
+                        continue
                     # el movimiento se suma a la posición actual del cabezal (abanico, en V, etc.)
                     bx, by = self.pt_to_xy(fid, cur[fid]["pan"], cur[fid].get("tilt", 0.5))
                     dx, dy = frontal.fx_xy(fx, self.mover_u(fid), k, len(fids), ph, fx["id"] + fid)

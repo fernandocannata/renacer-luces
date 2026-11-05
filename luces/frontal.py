@@ -34,6 +34,16 @@ def _square(p):
     return ax + (bx - ax) * f, ay + (by - ay) * f
 
 
+def canon_s(p):
+    """0 = arriba de todo, 1 = abajo del barrido; baja y sube suave."""
+    return 0.5 - 0.5 * math.cos(TAU * p)
+
+
+# Barrido vertical "en canon": grados reales de recorrido (tamaño 1 = 100°)
+CANON_DEG = 100.0
+CANON_TOP_MAX = 90.0   # lo más alto: hasta 90° por encima del frente
+
+
 def shape(kind, p, u, seed=""):
     """Recorrido base (dx, dy) en -1..1 para la fase p (una vuelta por unidad)."""
     th = TAU * p
@@ -67,6 +77,8 @@ def shape(kind, p, u, seed=""):
     if kind == "pelota":  # cruza de lado a lado rebotando
         tri = 2 / math.pi * math.asin(math.sin(th))
         return tri, 1.6 * abs(math.sin(4 * th)) - 0.8
+    if kind == "canon":  # de lo más alto hacia abajo y vuelve (el motor lo lleva a grados reales)
+        return 0.0, 1.0 - 2.0 * canon_s(p)
     if kind == "aleatorio":
         c = math.floor(p)
         a, b = _rand_point(seed, c), _rand_point(seed, c + 1)
@@ -80,6 +92,7 @@ SHAPES = {
     "vertical": "Arriba y abajo", "tijera": "Tijera", "abanico": "Abanico", "pendulo": "Péndulo",
     "cuadrado": "Cuadrado", "aleatorio": "Búsqueda al azar",
     "recorrido": "Gran paneo", "espiral": "Espiral", "zigzag": "Zigzag", "pelota": "Pelota",
+    "canon": "Barrido vertical en canon",
 }
 
 # Parámetros de un movimiento frontal (además de velocidad, desfase e invertir)
@@ -109,6 +122,10 @@ PRESETS = [
     ("espiral", "Espiral", "espiral", {"size": 0.7, "beats": 16}),
     ("zigzag", "Zigzag", "zigzag", {"size": 0.8, "beats": 16}),
     ("pelota", "Pelota", "pelota", {"size": 0.8, "beats": 8, "spread": 0.25}),
+    # bajan desde lo más alto unos 90°, uno detrás del otro (la posición horizontal no la tocan)
+    ("canon", "Barrido vertical en canon", "canon", {"size": 0.9, "beats": 8, "spread": 0.5}),
+    # solo horizontal: se abren hacia los costados y se cierran (se combina con el de arriba)
+    ("abre_cierra", "Abrir y cerrar", "abanico", {"size": 0.9, "beats": 8}),
 ]
 
 # Posiciones fijas: función del lugar en la barra (u) -> (x, y)
@@ -143,6 +160,8 @@ def fx_xy(fx, u, k, n, phase, seed):
 def preview_paths(kind, params, n=4, samples=72):
     """Recorrido de cada cabezal, para dibujar el ícono del movimiento."""
     fx = dict(DEFAULTS, **params, type="f_" + kind)
+    if kind == "canon":  # en el dibujo se separan para que se vea cada haz
+        fx["apertura"] = 0.75
     paths = []
     for k in range(n):
         u = head_u(k, n)

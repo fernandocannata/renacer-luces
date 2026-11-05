@@ -197,3 +197,44 @@ def test_gran_paneo_cubre_todo_el_frente_y_es_lento():
     assert max(ys) - min(ys) > 1.4        # y de abajo hacia arriba
     # lento: en medio segundo apenas se mueve
     assert abs(xs[5] - xs[0]) < 0.3
+
+
+def test_canon_baja_90_grados_desde_lo_mas_alto_en_canon():
+    e = make()
+    e.set_rig(flip_y=True)  # colgados: "arriba" es tilt hacia abajo -> hay ~171° hacia arriba
+    e.front_layout(CAB, "abanico", fade=0)
+    pans = [e.look[f]["pan"] for f in CAB]
+    p = next(x for x in frontal.PRESETS if x[0] == "canon")
+    fid_fx = e.add_fx(CAB, "f_canon", dict(p[3]))
+    fx = next(f for f in e.fx if f["id"] == fid_fx)
+    ft = e.rig()["front"]
+    degs = {}
+    for ph in (0.0, 0.375, 0.5):
+        e.fx_phase[fid_fx] = ph
+        cur = {f: dict(e.look[f]) for f in CAB}
+        e._apply_fx(cur, 0.0)
+        degs[ph] = [(ft[f][1] - cur[f]["tilt"]) * 180 for f in CAB]  # flip: arriba = tilt menor
+        assert [round(cur[f]["pan"], 6) for f in CAB] == [round(x, 6) for x in pans]  # no toca el pan
+    # el primero arranca 90° por encima del frente y a mitad de vuelta está 90° más abajo
+    assert abs(degs[0.0][0] - 90.0) < 0.5
+    assert abs(degs[0.5][0] - 0.0) < 0.5
+    # en canon: cada uno va atrasado respecto del anterior
+    assert degs[0.375][0] < degs[0.375][1] < degs[0.375][2] < degs[0.375][3]
+    assert fx["spread"] == 0.5
+
+
+def test_canon_se_combina_con_abrir_y_cerrar():
+    e = make()
+    e.set_rig(flip_y=True)
+    pc = dict(next(x for x in frontal.PRESETS if x[0] == "canon")[3])
+    pa = dict(next(x for x in frontal.PRESETS if x[0] == "abre_cierra")[3])
+    a = e.add_fx(CAB, "f_canon", pc)
+    b = e.add_fx(CAB, "f_abanico", pa, stack=True)
+    assert {f["id"] for f in e.fx} == {a, b}
+    e.fx_phase[a], e.fx_phase[b] = 0.0, 0.5  # canon arriba, abanico bien abierto
+    cur = {f: dict(e.look[f]) for f in CAB}
+    e._apply_fx(cur, 0.0)
+    xs = [e.pt_to_xy(f, cur[f]["pan"], cur[f]["tilt"])[0] for f in CAB]
+    assert xs[0] < -0.5 and xs[-1] > 0.5  # abiertos a los costados
+    ft = e.rig()["front"]
+    assert abs((ft[CAB[0]][1] - cur[CAB[0]]["tilt"]) * 180 - 90.0) < 0.5  # y arriba de todo
