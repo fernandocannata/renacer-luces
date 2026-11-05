@@ -242,9 +242,9 @@ def test_canon_se_combina_con_abrir_y_cerrar():
 
 def test_frente_recto_y_cruzados_par():
     e = make()
-    e.front_layout(CAB, "recto", fade=0)
+    e.front_layout(CAB, "frente", fade=0)
     xs = [e.pt_to_xy(f, e.look[f]["pan"], e.look[f]["tilt"])[0] for f in CAB]
-    assert xs[0] < 0 < xs[-1] and abs(xs[0]) < 0.2  # apenas abiertos: paralelos
+    assert all(abs(x) < 1e-6 for x in xs)  # cada uno derecho, a su propio frente
     e.front_layout(CAB, "cruzados_par", fade=0)
     xs = [e.pt_to_xy(f, e.look[f]["pan"], e.look[f]["tilt"])[0] for f in CAB]
     assert xs[0] > 0.4 and xs[3] < -0.4   # 1 y 4 se cruzan hacia adentro

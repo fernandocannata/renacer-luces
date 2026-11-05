@@ -128,13 +128,10 @@ PRESETS = [
     ("abre_cierra", "Abrir y cerrar", "abanico", {"size": 0.9, "beats": 8}),
 ]
 
-RECTO = 0.12  # ~7°: lo que se "cierra" el frente de las puntas para mirar al centro
-
 # Posiciones fijas: función del lugar en la barra (u) -> (x, y)
 LAYOUTS = [
-    ("frente", "Al frente", lambda u: (0.0, 0.0)),
-    # el frente calibrado apunta al centro del público; para que queden paralelos se abren apenas
-    ("recto", "Frente recto", lambda u: (RECTO * u, 0.0)),
+    # el frente calibrado de cada cabezal es "derecho hacia adelante": todos paralelos
+    ("frente", "Frente recto", lambda u: (0.0, 0.0)),
     ("publico", "Al público", lambda u: (0.0, -0.55)),
     ("alto", "Bien alto", lambda u: (0.0, 1.0)),
     ("abanico", "Abanico", lambda u: (0.8 * u, 0.0)),
@@ -147,8 +144,11 @@ LAYOUTS = [
     ("foco", "Foco al centro", lambda u: (-0.18 * u, -0.25)),
 ]
 LAYOUT_FN = {k: fn for k, _, fn in LAYOUTS}
-# en el dibujito: "recto" se ve con los haces paralelos
-DRAW = {"recto": lambda u: (0.88 * u, 0.0)}
+
+
+def draw_point(u, x, y):
+    """Punta del haz en el dibujito: sale de su lugar en la barra (x = 0 es derecho)."""
+    return [round(0.88 * u + 2.0 * x, 3), y]
 
 
 def fx_xy(fx, u, k, n, phase, seed):
@@ -183,6 +183,6 @@ def catalog():
         "presets": [{"id": pid, "name": name, "type": "f_" + kind, "params": dict(DEFAULTS, **prm),
                      "paths": preview_paths(kind, prm)} for pid, name, kind, prm in PRESETS],
         "layouts": [{"id": lid, "name": name,
-                     "points": [list(DRAW.get(lid, fn)(head_u(k, 4))) for k in range(4)]}
+                     "points": [draw_point(head_u(k, 4), *fn(head_u(k, 4))) for k in range(4)]}
                     for lid, name, fn in LAYOUTS],
     }
