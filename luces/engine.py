@@ -255,7 +255,7 @@ class Engine:
         d = default_look(prof)
         front = self.show.get("rig", {}).get("front", {}).get(fid)
         if front and "pan" in d:
-            d["pan"], d["tilt"] = front[0], front[1]
+            d["pan"], d["tilt"] = self._front_pt(fid)
         return d
 
     def locate(self, ids):
@@ -325,19 +325,33 @@ class Engine:
         use = min(span, pos_room if d >= 0 else neg_room)
         return d / use if use > 0.5 else 0.0
 
+    def _front_pt(self, fid):
+        """Frente calibrado (pan, tilt). Si el pan quedó pegado a un tope del recorrido
+        (no le queda lugar para girar hacia un costado), se usa la misma dirección una
+        vuelta (360°) más allá, donde tiene lugar para los dos lados."""
+        r = self.rig()
+        fp, ft = r["front"].get(fid, [0.5, 0.5])
+        pdeg = self._degrees(fid)[0]
+        need = 1.4 * float(r["span_x"]) / pdeg   # lugar para posiciones y movimientos grandes
+        if pdeg > 360 and min(fp, 1.0 - fp) < need:
+            turn = 360.0 / pdeg
+            options = [c for c in (fp - turn, fp, fp + turn) if 0.0 <= c <= 1.0]
+            fp = max(options, key=lambda c: min(c, 1.0 - c))
+        return fp, ft
+
     def xy_to_pt(self, fid, x, y):
         """Punto del público (x, y) -> pan/tilt. Si un eje no tiene recorrido
         suficiente (cabezales colgados no suben mucho más que la horizontal),
         el movimiento se achata para que entre, en lugar de cortarse."""
         r = self.rig()
-        fp, ft = r["front"].get(fid, [0.5, 0.5])
+        fp, ft = self._front_pt(fid)
         pdeg, tdeg = self._degrees(fid)
         return (self._axis(fp, x, float(r["span_x"]), pdeg, r.get("flip_x")),
                 self._axis(ft, y, float(r["span_y"]), tdeg, r.get("flip_y")))
 
     def pt_to_xy(self, fid, pan, tilt):
         r = self.rig()
-        fp, ft = r["front"].get(fid, [0.5, 0.5])
+        fp, ft = self._front_pt(fid)
         pdeg, tdeg = self._degrees(fid)
         return (self._axis_inv(fp, pan, float(r["span_x"]), pdeg, r.get("flip_x")),
                 self._axis_inv(ft, tilt, float(r["span_y"]), tdeg, r.get("flip_y")))

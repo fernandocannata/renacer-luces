@@ -261,3 +261,20 @@ def test_altura_no_cambia_el_costado():
     for f in CAB:
         assert abs(after[f][0] - before[f][0]) < 0.01
         assert abs(after[f][1] - 0.6) < 0.01
+
+
+def test_frente_pegado_al_tope_de_pan_igual_abre():
+    """Si un cabezal se calibró con el pan casi en el tope, igual tiene que poder
+    girar hacia ese lado (usa la misma dirección una vuelta más allá)."""
+    e = make()
+    e.set_position([CAB[1]], 0.01, 0.95)   # el 2 calibrado pegado al tope del pan
+    e.save_front([CAB[1]])
+    e.front_layout(CAB, "cruzados_par", fade=0)
+    x2 = e.pt_to_xy(CAB[1], e.look[CAB[1]]["pan"], e.look[CAB[1]]["tilt"])[0]
+    assert x2 < -0.55  # abre hacia afuera como pide la posición
+    # y apunta a la misma dirección física: 36° hacia el costado del frente original
+    deg = (e.look[CAB[1]]["pan"] - 0.01) * 540
+    assert abs((deg % 360) - (360 - 36)) < 1.0 or abs((deg % 360) - 36) < 1.0
+    # al frente queda en la misma dirección que se calibró (una vuelta más allá)
+    e.front_layout([CAB[1]], "frente", fade=0)
+    assert abs(((e.look[CAB[1]]["pan"] - 0.01) * 540) % 360) < 1e-6
