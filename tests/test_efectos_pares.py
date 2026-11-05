@@ -124,3 +124,25 @@ def test_despertar_sube_y_baja_de_a_un_canal():
     assert all(sum(1 for v in s[1:] if v == 255) <= 1 for s in seen[:40])
     assert seen[-1] == (255, 255, 204, 0, 0)        # y al final queda el amarillo real
     assert not e._wake
+
+
+def test_strobo_despues_de_clear_destella_en_blanco():
+    import time as _t
+    from luces.engine import Engine
+    from luces.fixtures import Library
+    from luces.storage import default_show
+    import tempfile
+    lib = Library(os.path.join(ROOT, "perfiles"), tempfile.mkdtemp())
+    for prof in lib.profiles.values():
+        prof["refresco"] = False
+    e = Engine(lib, default_show())
+    pars = [f for f in e.show["fixtures"] if "nebula" in f["profile"]]
+    e.clear_all()
+    e.set_hold("strobe", True) if hasattr(e, "set_hold") else e.holds.add("strobe")
+    fr = e.tick()
+    a = pars[0]["address"] - 1
+    assert fr[a] == 255 and fr[a + 4] == 255  # dimmer y blanco: se ve el destello
+    e.holds.clear()
+    # un efecto de intensidad sobre pares sin color también los pone en blanco
+    e.add_fx([f["id"] for f in pars], "pulso")
+    assert e.look[pars[0]["id"]]["w"] == 1
