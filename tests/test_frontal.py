@@ -238,3 +238,26 @@ def test_canon_se_combina_con_abrir_y_cerrar():
     assert xs[0] < -0.5 and xs[-1] > 0.5  # abiertos a los costados
     ft = e.rig()["front"]
     assert abs((ft[CAB[0]][1] - cur[CAB[0]]["tilt"]) * 180 - 90.0) < 0.5  # y arriba de todo
+
+
+def test_frente_recto_y_cruzados_par():
+    e = make()
+    e.front_layout(CAB, "recto", fade=0)
+    xs = [e.pt_to_xy(f, e.look[f]["pan"], e.look[f]["tilt"])[0] for f in CAB]
+    assert xs[0] < 0 < xs[-1] and abs(xs[0]) < 0.2  # apenas abiertos: paralelos
+    e.front_layout(CAB, "cruzados_par", fade=0)
+    xs = [e.pt_to_xy(f, e.look[f]["pan"], e.look[f]["tilt"])[0] for f in CAB]
+    assert xs[0] > 0.4 and xs[3] < -0.4   # 1 y 4 se cruzan hacia adentro
+    assert xs[1] < -0.4 and xs[2] > 0.4   # 2 y 3 abren hacia afuera
+
+
+def test_altura_no_cambia_el_costado():
+    e = make()
+    e.set_rig(flip_y=True)
+    e.front_layout(CAB, "cruzados_par", fade=0)
+    before = e.movers_xy()
+    e.front_height(CAB, 0.6)
+    after = e.movers_xy()
+    for f in CAB:
+        assert abs(after[f][0] - before[f][0]) < 0.01
+        assert abs(after[f][1] - 0.6) < 0.01

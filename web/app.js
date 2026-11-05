@@ -571,6 +571,10 @@ function renderMov() {
   const t = moveTargets();
   $('#movTarget').textContent = !movers.length ? 'No hay cabezales en el show'
     : selWith('mover').length ? `Se aplica a los ${t.length} elegidos` : `Se aplica a los ${t.length} cabezales`;
+  const t0 = t.find((i) => S.movers_xy && S.movers_xy[i]);
+  const hy = t0 ? S.movers_xy[t0][1] : null;
+  if (document.activeElement !== $('#movHeight')) $('#movHeight').value = hy ?? 0;
+  $('#movHeightVal').textContent = hy == null ? '—' : (hy > 0.005 ? '+' : '') + Math.round(hy * 100) + '%';
   setVal($('#flipX'), r.flip_x); setVal($('#flipY'), r.flip_y); setVal($('#revOrder'), r.reverse_order);
   setVal($('#spanX'), r.span_x); setVal($('#spanY'), r.span_y);
   $('#spanXVal').textContent = Math.round(r.span_x) + '°';
@@ -1087,6 +1091,17 @@ function buildStatic() {
     const p = INIT.frontal.presets[+b.dataset.mpreset];
     if (await api('add_fx', { ids: t, type: p.type, params: { ...p.params, name: p.name }, stack: movStack }))
       toast(p.name + (movStack ? ' sumado' : ' en marcha'));
+  });
+  // altura: sube o baja sin cambiar hacia qué costado miran
+  const hgtTxt = (v) => (v > 0.005 ? '+' : '') + Math.round(v * 100) + '%';
+  $('#movHeight').oninput = (e) => {
+    const t = needMovers(); if (!t.length) return;
+    $('#movHeightVal').textContent = hgtTxt(+e.target.value);
+    sendLatest('hgt', 'front_height', { ids: t, y: +e.target.value });
+  };
+  $('#movHeight').closest('.ppanel').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-hgt]'); if (!b) return;
+    const t = needMovers(); if (t.length) api('front_height', { ids: t, y: +b.dataset.hgt, fade: 0.6 });
   });
   $('#layouts').addEventListener('click', (e) => {
     const b = e.target.closest('[data-layout]'); if (!b) return;

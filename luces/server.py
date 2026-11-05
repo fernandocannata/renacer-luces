@@ -80,7 +80,7 @@ APP_BUILD = _read_build()
 # Lo que puede hacer el celular: manejar el show, no configurar ni borrar nada
 REMOTE_COMMANDS = {
     "set_attrs", "set_color", "set_wheel", "set_position", "set_positions", "fan", "locate", "clear",
-    "add_fx", "update_fx", "remove_fx", "recall_scene", "recall_position", "front_layout",
+    "add_fx", "update_fx", "remove_fx", "recall_scene", "recall_position", "front_layout", "front_height",
     "go", "back", "stop_cues", "master", "blackout", "hold", "tap", "bpm", "sync_set", "strobe2_set",
     "clear_all", "undo_clear", "wake",
 }
@@ -240,6 +240,8 @@ class App:
             e.set_position(ids, c.get("pan"), c.get("tilt"))
         elif cmd == "set_positions":
             e.set_positions(c.get("values", {}))
+        elif cmd == "front_height":
+            e.front_height(ids, c["y"], float(c.get("fade", 0.0)))
         elif cmd == "front_layout":
             e.front_layout(ids, c["name"], float(c.get("fade", 0.8)))
         elif cmd == "front_test":

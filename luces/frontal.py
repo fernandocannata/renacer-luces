@@ -128,19 +128,27 @@ PRESETS = [
     ("abre_cierra", "Abrir y cerrar", "abanico", {"size": 0.9, "beats": 8}),
 ]
 
+RECTO = 0.12  # ~7°: lo que se "cierra" el frente de las puntas para mirar al centro
+
 # Posiciones fijas: función del lugar en la barra (u) -> (x, y)
 LAYOUTS = [
     ("frente", "Al frente", lambda u: (0.0, 0.0)),
+    # el frente calibrado apunta al centro del público; para que queden paralelos se abren apenas
+    ("recto", "Frente recto", lambda u: (RECTO * u, 0.0)),
     ("publico", "Al público", lambda u: (0.0, -0.55)),
     ("alto", "Bien alto", lambda u: (0.0, 1.0)),
     ("abanico", "Abanico", lambda u: (0.8 * u, 0.0)),
     ("cruzados", "Cruzados", lambda u: (-0.55 * u, 0.0)),
+    # los de las puntas se cruzan hacia adentro y los del medio abren hacia afuera
+    ("cruzados_par", "Cruzados par", lambda u: (-0.55 * u if abs(u) > 0.5 else (0.6 if u > 0 else -0.6 if u < 0 else 0.0), 0.0)),
     ("costados", "A los costados", lambda u: ((0.75 + 0.25 * abs(u)) * (1 if u > 0 else -1 if u < 0 else 0), 0.1)),
     ("v", "En V", lambda u: (0.6 * u, 0.75)),
     ("escalera", "Escalera", lambda u: (0.45 * u, 0.55 * u)),
     ("foco", "Foco al centro", lambda u: (-0.18 * u, -0.25)),
 ]
 LAYOUT_FN = {k: fn for k, _, fn in LAYOUTS}
+# en el dibujito: "recto" se ve con los haces paralelos
+DRAW = {"recto": lambda u: (0.88 * u, 0.0)}
 
 
 def fx_xy(fx, u, k, n, phase, seed):
@@ -174,6 +182,7 @@ def catalog():
     return {
         "presets": [{"id": pid, "name": name, "type": "f_" + kind, "params": dict(DEFAULTS, **prm),
                      "paths": preview_paths(kind, prm)} for pid, name, kind, prm in PRESETS],
-        "layouts": [{"id": lid, "name": name, "points": [list(fn(head_u(k, 4))) for k in range(4)]}
+        "layouts": [{"id": lid, "name": name,
+                     "points": [list(DRAW.get(lid, fn)(head_u(k, 4))) for k in range(4)]}
                     for lid, name, fn in LAYOUTS],
     }

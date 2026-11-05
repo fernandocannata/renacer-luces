@@ -386,6 +386,29 @@ class Engine:
                 self.look[fid]["pan"], self.look[fid]["tilt"] = pan, tilt
             self.changed()  # si hay un movimiento corriendo, sigue desde la posición nueva
 
+    def front_height(self, ids, y, fade=0.0):
+        """Sube o baja los cabezales elegidos sin cambiar hacia qué costado miran."""
+        y = max(-1.2, min(1.2, float(y)))
+        with self.lock:
+            targets = [i for i in self.movers() if i in set(ids)]
+            if not targets:
+                raise ValueError("Elegí cabezales")
+            if fade:
+                self._start_fade(fade)
+            for fid in targets:
+                v = self.look[fid]
+                x, _ = self.pt_to_xy(fid, v.get("pan", 0.5), v.get("tilt", 0.5))
+                v["pan"], v["tilt"] = self.xy_to_pt(fid, x, y)
+            self.changed()
+
+    def movers_xy(self):
+        out = {}
+        for fid in self.movers():
+            v = self.look.get(fid, {})
+            x, y = self.pt_to_xy(fid, v.get("pan", 0.5), v.get("tilt", 0.5))
+            out[fid] = [round(x, 3), round(y, 3)]
+        return out
+
     def front_test(self, ids, x, y):
         """Mueve los cabezales a un punto del público (para verificar direcciones)."""
         with self.lock:
@@ -1225,6 +1248,6 @@ class Engine:
                 "cue_auto": self.cue_next_at is not None,
                 "test": {str(k): v for k, v in self.test.items()},
                 "conflicts": self.conflicts(),
-                "rig": self.rig(), "movers": self.movers(), "can_undo_clear": self._undo is not None,
+                "rig": self.rig(), "movers": self.movers(), "movers_xy": self.movers_xy(), "can_undo_clear": self._undo is not None,
                 "version": self.version,
             })

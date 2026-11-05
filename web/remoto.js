@@ -181,6 +181,16 @@ function buildStatic() {
     if (!ids.length) return toast('Elegí al menos un cabezal', true);
     if (await api('add_fx', { ids, type: p.type, params: { ...p.params, name: p.name }, stack })) toast(p.name + (stack ? ' sumado' : ' en marcha'));
   });
+  $('#movHeight').oninput = (e) => {
+    const ids = moverIds(); if (!ids.length) return;
+    $('#movHeightVal').textContent = signedPct(+e.target.value);
+    sendLatest('hgt', 'front_height', { ids, y: +e.target.value });
+  };
+  $('section[data-tab=mov]').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-hgt]'); if (!b) return;
+    const ids = moverIds(); if (!ids.length) return toast('Elegí al menos un cabezal', true);
+    api('front_height', { ids, y: +b.dataset.hgt, fade: 0.6 });
+  });
   $('#layouts').addEventListener('click', (e) => { const b = e.target.closest('[data-layout]'); if (!b) return; const ids = moverIds(); if (!ids.length) return toast('Elegí al menos un cabezal', true); api('front_layout', { ids, name: b.dataset.layout }); });
   $('#stack').onclick = () => { stack = !stack; $('#stack').classList.toggle('on', stack); $('#stack').setAttribute('aria-pressed', stack); };
   $('#movStop').onclick = () => {
@@ -321,8 +331,13 @@ function renderFx() {
   }
 }
 
+const signedPct = (v) => (v > 0.005 ? '+' : '') + Math.round(v * 100) + '%';
 function renderMov() {
   const n = movers().length, k = moverIds().length;
+  const f0 = moverIds().find((i) => S.movers_xy && S.movers_xy[i]);
+  const hy = f0 ? S.movers_xy[f0][1] : null;
+  if (document.activeElement !== $('#movHeight')) $('#movHeight').value = hy ?? 0;
+  $('#movHeightVal').textContent = hy == null ? '—' : signedPct(hy);
   $('#movHint').textContent = !n ? 'No hay cabezales en el show.'
     : S.rig && !S.rig.calibrated ? 'Ojo: el frente al público todavía no está ajustado (se hace en la PC).'
     : !k ? 'Elegí arriba los cabezales.'
