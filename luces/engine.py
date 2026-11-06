@@ -48,12 +48,6 @@ def clamp(v, lo=0.0, hi=1.0):
     return lo if v < lo else hi if v > hi else v
 
 
-def is_black(v):
-    """Equipo LED sin ningún color puesto (rojo, verde, azul y blanco en cero)."""
-    keys = [k for k in ("r", "g", "b", "w") if k in v]
-    return bool(keys) and all(float(v.get(k) or 0) <= 0.01 for k in keys)
-
-
 class Engine:
     FRAME_HZ = 40
 
@@ -559,13 +553,6 @@ class Engine:
                 for fid in ids:
                     if self.look[fid].get("dim", 0) == 0:
                         self._set(fid, "dim", 1.0)
-                    colored = any(FX_TYPES.get(f["type"], ("",))[0] == "color" and fid in f["ids"] for f in self.fx)
-                    if fam == "dim" and not colored and is_black(self.look[fid]):  # ni sin color: en blanco
-                        tmp = dict(self.look[fid])
-                        apply_color(self.profile_of(fid), tmp, (0, 0, 0, 1))
-                        for k in ("r", "g", "b", "w"):
-                            if k in tmp:
-                                self._set(fid, k, tmp[k])
             self.changed()
             return fx["id"]
 
@@ -1064,8 +1051,6 @@ class Engine:
                         v["strobe"] = 0.0
                 if "strobe" in self.holds and light:
                     v["dim"] = 1.0
-                    if is_black(v):  # sin color (por ejemplo después de un Clear): destella en blanco
-                        apply_color(prof, v, (0, 0, 0, 1))
                     if "strobe" in c:
                         v["strobe"] = 1.0
                     else:
@@ -1075,7 +1060,7 @@ class Engine:
                     v["dim"] = 1.0 if on else 0.0
                     if "strobe" in v:
                         v["strobe"] = 0.0  # lo maneja el programa, no el equipo
-                    if on and (self.show["settings"]["strobe2"].get("white") or is_black(v)):
+                    if on and self.show["settings"]["strobe2"].get("white"):
                         apply_color(prof, v, (0, 0, 0, 1))
                 if "humo" in self.holds and "smoke" in v:
                     v["smoke"] = 1.0
