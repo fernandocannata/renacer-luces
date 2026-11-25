@@ -393,16 +393,19 @@ function fixtureSvg(ic) {
 /* largo de cada haz: desde la lente hasta el piso del escenario */
 function layoutBeams() {
   const st = $('.stage');
-  if (!st) return;
+  if (!st || !st.offsetParent) return;   // escondido (otra pestaña): se acomoda al volver a verse
   const floor = st.querySelector('.apron').getBoundingClientRect().top + 64;
-  const top = st.getBoundingClientRect().top;
+  const sr = st.getBoundingClientRect(), top = sr.top;
   for (const t of $$('.tile', st)) {
     const r = t.getBoundingClientRect();
     const up = !!t.closest('.floor-rig');   // los del piso tiran el haz para arriba
-    t.style.setProperty('--len', Math.max(40, up ? r.top - top - 6 : floor - r.top - 40) + 'px');
+    // los del piso, más cortos: hasta un poco menos de la mitad del escenario
+    t.style.setProperty('--len', Math.max(40, up ? Math.min(r.top - top - 6, sr.height * 0.42) : floor - r.top - 40) + 'px');
   }
 }
 window.addEventListener('resize', () => layoutBeams());
+// al volver a la pestaña Operar o cambiar el tamaño del escenario, los haces se vuelven a medir
+if (window.ResizeObserver) new ResizeObserver(() => layoutBeams()).observe(document.getElementById('tileGroups'));
 
 function paintSelection() {
   for (const t of $$('.tile')) t.classList.toggle('sel', sel.has(t.dataset.id));
@@ -933,6 +936,7 @@ function buildStatic() {
     $$('#tabs button').forEach((x) => x.classList.toggle('on', x === b));
     $$('.view').forEach((v) => v.classList.toggle('on', v.id === b.dataset.view));
     if (b.dataset.view !== 'probar' && S && Object.keys(S.test).length) api('test_clear');
+    requestAnimationFrame(layoutBeams);
   };
   for (const b of $$('#progTabs button')) b.onclick = () => {
     $$('#progTabs button').forEach((x) => x.classList.toggle('on', x === b));

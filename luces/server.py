@@ -60,7 +60,7 @@ from .fixtures import CHANNEL_ATTRS, PALETTE, Library
 from .storage import Storage, base_dir, default_show, safe_name
 
 APP_NAME = "Renacer LightShow"
-APP_VERSION = "2.3"
+APP_VERSION = "2.4"
 
 
 def _read_build():
