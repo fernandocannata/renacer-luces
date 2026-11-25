@@ -133,7 +133,7 @@ main { height: calc(100% - 110px); }
 .view.on { display: block; }
 
 /* ---------------------------------------------------------- operar ---- */
-#operar.on { display: grid; grid-template-columns: minmax(290px, 1fr) minmax(380px, 1.25fr) minmax(300px, 1fr); }
+#operar.on { display: grid; grid-template-columns: minmax(260px, 1fr) minmax(350px, 1.2fr) minmax(240px, .9fr) 344px; }
 .col { padding: 14px; overflow: auto; border-right: 1px solid var(--line); min-height: 0; }
 .col:last-child { border-right: 0; }
 .colhead { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
@@ -654,3 +654,38 @@ code { font: 600 12.5px var(--num); background: var(--ctrl); padding: 1px 6px; b
 .swatch.cur { outline: 2px solid var(--amber); outline-offset: 2px; }
 .stage .tile .nm { background: rgba(10, 8, 13, .72); border-radius: 6px; padding: 0 5px; margin-top: 1px; }
 #patchRows td label.hint { white-space: nowrap; margin-right: 6px; }
+
+/* ---------------------------------------------------------- faders ---- */
+.fadercol { display: flex; flex-direction: column; overflow: hidden; background: linear-gradient(90deg, rgba(26,21,32,.9), rgba(20,16,25,.9)); border-left: 1px solid rgba(217,165,91,.3); }
+.fdtabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; margin-bottom: 8px; }
+.fdtabs button { background: transparent; border: 1px solid var(--line); padding: 7px 4px; font-size: 13px; }
+.fdtabs button.on { background: var(--ctrl-hi); border-color: var(--amber); color: var(--text); }
+.fdhint { min-height: 0; margin: 0 0 6px; }
+.fdhint:empty { display: none; }
+.fdbank { flex: 1; min-height: 300px; display: flex; gap: 4px; justify-content: space-between; overflow-x: auto; overflow-y: hidden; padding-bottom: 2px; }
+.fd { display: flex; flex-direction: column; align-items: center; gap: 6px; flex: 1 1 0; min-width: 46px; max-width: 84px; }
+.fd-name { display: flex; align-items: center; justify-content: center; gap: 4px; font: 600 11px/1.15 var(--body); color: var(--text); max-width: 100%; height: 26px; text-align: center; }
+.fd-name i { display: none; }
+.fd-name span { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: normal; }
+.fd-val { font: 700 16px var(--num); font-variant-numeric: tabular-nums; height: 20px; white-space: nowrap; }
+.fd-track { position: relative; flex: 1; width: 100%; max-width: 54px; min-height: 120px; touch-action: none; cursor: ns-resize; border-radius: 8px; outline: none; }
+.fd-rail, .fd-fill { position: absolute; left: 50%; width: 6px; margin-left: -3px; border-radius: 3px; }
+.fd-rail { top: 13px; bottom: 13px; background: var(--ctrl); box-shadow: inset 0 1px 2px rgba(0,0,0,.6); }
+.fd-fill { bottom: 13px; height: calc(var(--v, 0) * (100% - 26px)); background: var(--c); box-shadow: 0 0 10px var(--c); }
+.fd-cap { position: absolute; left: 3px; right: 3px; height: 26px; bottom: calc(var(--v, 0) * (100% - 26px)); border-radius: 6px;
+  background: linear-gradient(#f2ebdf, #b8ad9e); border: 1px solid #0f0c13; box-shadow: 0 4px 10px rgba(0,0,0,.6); }
+.fd-cap::after { content: ""; position: absolute; left: 6px; right: 6px; top: 11px; height: 2px; background: #0f0c13; }
+.fd.active .fd-cap, .fd-track:focus-visible .fd-cap { box-shadow: 0 0 0 2px var(--amber), 0 4px 10px rgba(0,0,0,.6); }
+.fd-btn { width: 100%; padding: 9px 0; font: 600 12.5px var(--num); background: var(--ctrl); border: 1px solid var(--ctrl-hi); touch-action: none; }
+.fd-btn.held { background: #fff; color: #000; box-shadow: 0 0 16px rgba(255,255,255,.5); }
+.fd-btn.on { background: var(--red); color: #fff; border-color: var(--red); }
+.fd-nobtn { visibility: hidden; height: 36px; }
+@media (max-width: 1100px) { .fadercol { border-left: 0; } .fdbank { height: 440px; flex: none; } }
+
+/* paletas rápidas */
+.palettes { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 12px; }
+.palettes button { display: flex; align-items: center; gap: 6px; padding: 6px 10px; background: transparent; border: 1px solid var(--line); font-size: 13px; }
+.palettes button.on { border-color: var(--amber); background: var(--ctrl-hi); }
+.palettes .dots { display: flex; }
+.palettes .dots i { width: 10px; height: 10px; border-radius: 50%; margin-left: -3px; border: 1px solid rgba(0,0,0,.5); }
+.palettes button.on { color: var(--text); }

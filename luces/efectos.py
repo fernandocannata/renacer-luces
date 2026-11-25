@@ -33,9 +33,32 @@ TYPES = {
     "degrade": ("color", "Degradé", "rgb"),
     "confeti": ("color", "Confeti", "color"),
     "barrido_color": ("color", "Barrido de color", "color"),
+    # para el baile (pensados para los Nebula, sirven en cualquier par)
+    "golpe": ("dim", "Golpe al beat", "dim"),
+    "cometa": ("dim", "Cometa", "dim"),
+    "strobo_tempo": ("dim", "Strobo al tempo", "dim"),
+    "subida": ("dim", "Subida", "dim"),
+    "color_beat": ("color", "Color al beat", "color"),
+    "chispas_color": ("color", "Chispas de color", "rgb"),
 }
 
-SIZE_LABEL = {"pulso": "Ancho", "rebote": "Ancho", "onda": "Profundidad", "azar": "Cantidad",
+# efectos que se apagan solos al terminar (la subida termina en un fogonazo)
+ONCE = {"subida"}
+
+# paletas rápidas: cambian los colores de todos los efectos de color
+PALETTES = [
+    ("fiesta", "Fiesta", ["#ff2020", "#2a46ff", "#22e04a", "#ffd60a", "#ff2ae6"]),
+    ("fuego", "Fuego", ["#ff2010", "#ff6a00", "#ffb030", "#ffd60a"]),
+    ("hielo", "Hielo", ["#2a46ff", "#22c8ff", "#ffffff", "#7a3cff"]),
+    ("neon", "Neón", ["#ff2ae6", "#00f0ff", "#9dff00", "#7a3cff"]),
+    ("calida", "Cálida", ["#ffb030", "#ff5fa0", "#ff7a2a", "#ffd9a0"]),
+]
+# tipos que toman la paleta (los que usan varios colores)
+PALETTE_TYPES = {"colores", "alternar", "mitades", "degrade", "confeti", "barrido_color",
+                 "color_beat", "chispas_color"}
+
+SIZE_LABEL = {"golpe": "Corte", "cometa": "Cola", "strobo_tempo": "Rapidez", "subida": "Brillo final",
+              "chispas_color": "Cantidad", "pulso": "Ancho", "rebote": "Ancho", "onda": "Profundidad", "azar": "Cantidad",
               "chispas": "Cantidad", "relampago": "Frecuencia", "fuego": "Intensidad",
               "centro": "Ancho", "vela": "Profundidad", "destellos": "Cantidad", "barrido_color": "Ancho"}
 
@@ -138,6 +161,43 @@ def fx_eval(fx, k, n, ph, seed=""):
             pos = (n - 1) - pos
         on = abs(k - pos) < max(0.5, size * n / 2)
         return None, hex_to_rgb(cols[(1 if on else 0) % len(cols)])
+    if t == "golpe":  # pega fuerte en cada tiempo y se apaga rápido
+        beats = max(float(fx.get("beats", 4)), 1.0)
+        if spread >= 0.5:  # alternado: los pares en un tiempo, los impares en el otro
+            f = frac((ph * beats - order % 2) / 2.0)
+        else:
+            f = frac(ph * beats)
+        return 0.04 + 0.96 * math.exp(-f * (3.0 + size * 14.0)), None
+    if t == "cometa":  # una luz con cola que da la vuelta por todos
+        pos = frac(ph) * n
+        if fx.get("reverse"):
+            pos = n - pos
+        d = (pos - k) % n          # cuánto pasó la cabeza por este equipo
+        tail = max(0.6, size * n)
+        return max(0.0, 1.0 - d / tail) if d < tail else 0.0, None
+    if t == "strobo_tempo":  # destellos cortos pegados al tempo (1, 2, 4 u 8 por tiempo)
+        beats = max(float(fx.get("beats", 1)), 0.25)
+        div = 2 ** int(round(size * 3))
+        return (1.0 if frac(p * beats * div) < 0.3 else 0.0), None
+    if t == "subida":  # pulsos que se aceleran y terminan en un fogonazo
+        x = min(ph, 1.0)
+        if x >= 0.94:
+            return 1.0, None
+        beats = max(float(fx.get("beats", 16)), 1.0)
+        q = beats * (2 ** (3 * x) - 1) / (3 * math.log(2))  # 1 pulso por tiempo al principio, 8 al final
+        level = 0.35 + 0.65 * x
+        return (level if frac(q) < 0.45 else 0.0), None
+    if t == "color_beat":  # cambia de color en cada tiempo (juntos o alternados)
+        beats = max(float(fx.get("beats", 4)), 1.0)
+        b = math.floor(ph * beats + 1e-9)
+        off = order if spread >= 0.5 else 0
+        return None, hex_to_rgb(cols[(b + off) % len(cols)])
+    if t == "chispas_color":  # destellos al azar, cada uno de un color
+        sub = ph * 12
+        cell = math.floor(sub)
+        on = _rnd(seed, "cc", k, cell) < 0.1 + size * 0.45 and frac(sub) < 0.5
+        col = hex_to_rgb(cols[int(_rnd(seed, "cl", k, cell) * len(cols)) % len(cols)])
+        return (1.0 if on else 0.05), col
     if t == "fuego":
         v = _smooth_noise(str(seed) + str(k), ph * 8)
         dim = 1 - size * 0.65 * (1 - v)
@@ -172,6 +232,18 @@ PRESETS = [
     ("degrade_calido", "Degradé cálido", "degrade", {"beats": 8, "spread": 1.0, "colors": ["#ff2020", "#ffb030"]}),
     ("confeti", "Confeti", "confeti", {"beats": 2, "colors": ["#ff2020", "#22e04a", "#2a46ff", "#ffd60a", "#ff2ae6"]}),
     ("barrido_color", "Barrido de color", "barrido_color", {"beats": 4, "size": 0.3, "colors": ["#2a46ff", "#ffffff"]}),
+    # para el baile
+    ("golpe", "Golpe al beat", "golpe", {"beats": 1, "size": 0.5, "spread": 0.0}),
+    ("golpe_alterno", "Golpe alternado", "golpe", {"beats": 2, "size": 0.5, "spread": 1.0}),
+    ("cometa", "Cometa", "cometa", {"beats": 4, "size": 0.4}),
+    ("strobo_tempo", "Strobo al tempo", "strobo_tempo", {"beats": 1, "size": 0.67, "spread": 0.0}),
+    ("subida", "Subida (al drop)", "subida", {"beats": 16, "spread": 0.0}),
+    ("color_beat", "Color al beat", "color_beat", {"beats": 4, "spread": 0.0,
+                                                    "colors": ["#ff2020", "#2a46ff", "#22e04a", "#ff2ae6"]}),
+    ("color_beat_alt", "Color al beat alternado", "color_beat", {"beats": 4, "spread": 1.0,
+                                                                  "colors": ["#ff2020", "#2a46ff", "#22e04a", "#ff2ae6"]}),
+    ("chispas_color", "Chispas de color", "chispas_color", {"beats": 4, "size": 0.5,
+                                                            "colors": ["#ff2020", "#2a46ff", "#22e04a", "#ffd60a", "#ff2ae6"]}),
 ]
 
 PREVIEW_BASE = (1.0, 0.82, 0.55)  # color de fondo para dibujar efectos de intensidad

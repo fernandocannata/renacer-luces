@@ -76,6 +76,10 @@ const typeOf = (id) => PROF[fx(id)?.profile]?.tipo || 'dimmer';
 const lookOf = (id) => (S && S.look[id]) || {};
 const lights = () => fixtures().filter((f) => typeOf(f.id) !== 'humo').map((f) => f.id);
 const ofType = (t) => fixtures().filter((f) => typeOf(f.id) === t).map((f) => f.id);
+const lightGroups = () => ((S && S.groups) || []).filter((g) => g.tipo !== 'humo');
+const groupIdsOf = (name) => (lightGroups().find((g) => g.name === name) || { ids: [] }).ids;
+const groupName = (id) => (lightGroups().find((g) => g.ids.includes(id)) || {}).name || TYPE_LABEL[typeOf(id)] || 'Equipo';
+let fdBank = (() => { try { return localStorage.getItem('fdBank') || 'grupos'; } catch (e) { return 'grupos'; } })();
 const movers = () => fixtures().filter((f) => capsOf(f.id).has('mover')).map((f) => f.id);
 // equipos elegidos, en el orden del show
 const groupIds = () => lights().filter((i) => sel.has(i));
@@ -151,7 +155,7 @@ function buildStatic() {
     const g = e.target.closest('[data-g]'), f = e.target.closest('[data-fid]');
     if (g) {
       const k = g.dataset.g, mov = box.dataset.sel === 'mov';
-      const ids = k === 'all' ? (mov ? movers() : lights()) : k === 'none' ? [] : ofType(k);
+      const ids = k === 'all' ? (mov ? movers() : lights()) : k === 'none' ? [] : groupIdsOf(k.slice(4));
       if (mov) { for (const i of movers()) sel.delete(i); for (const i of ids) sel.add(i); }
       else sel = new Set(ids);
     } else if (f) {
@@ -160,6 +164,14 @@ function buildStatic() {
     } else return;
     sigs.sel = null; sigs.fxp = null; sigs.col = null; render();
   });
+
+  // faders
+  $('#fdTabs').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-bank]'); if (!b) return;
+    fdBank = b.dataset.bank; try { localStorage.setItem('fdBank', fdBank); } catch (err) { /* nada */ }
+    renderFaders();
+  });
+  $('#palettes').addEventListener('click', (e) => { const b = e.target.closest('[data-pal]'); if (b) api('palette', { id: b.dataset.pal || null }); });
 
   // efectos
   for (const box of [$('#fxDim'), $('#fxCol')]) box.addEventListener('click', async (e) => {
@@ -228,7 +240,7 @@ function buildStatic() {
     sendLatest(k, 'set_attrs', { ids, attrs: { [k]: +e.target.value } });
   };
 
-  window.addEventListener('blur', () => { for (const k of ['flash', 'strobe', 'strobe2']) if (S && S.holds.includes(k)) api('hold', { kind: k, on: false }); });
+  window.addEventListener('blur', () => { if (S) for (const k of S.holds) if (['flash', 'strobe', 'strobe2'].includes(k) || k.startsWith('g:')) api('hold', { kind: k, on: false }); });
 }
 
 /* ------------------------------------------------------------ estado */
@@ -253,20 +265,36 @@ function render() {
   for (const b of $$('[data-hold]')) b.classList.toggle('held', S.holds.includes(b.dataset.hold));
   if (document.activeElement !== $('#master')) $('#master').value = S.master;
   $('#masterVal').textContent = pct(S.master);
-  renderSel(); renderCues(); renderScenes(); renderFx(); renderMov(); renderColor(); renderHaz();
+  renderSel(); renderCues(); renderScenes(); renderFx(); renderMov(); renderColor(); renderHaz(); renderFaders(); renderPalettes();
+}
+
+function renderFaders() {
+  for (const b of $$('#fdTabs button')) b.classList.toggle('on', b.dataset.bank === fdBank);
+  const ids = groupIds();
+  $('#fdSel').style.display = fdBank === 'sel' ? '' : 'none';
+  const defs = window.Faders.defs(fdBank, { S, ids, capsOf, lookOf, api, sendLatest });
+  $('#fdHint').textContent = fdBank === 'sel' && !ids.length ? 'Elegí arriba los equipos.' : fdBank === 'sel' && !defs.length ? 'Lo elegido no tiene nada para manejar con faders.' : '';
+  window.Faders.render($('#fdBank'), defs);
+}
+function renderPalettes() {
+  if (!INIT.palettes) return;
+  const cur = S.settings.paleta || null;
+  if (!changed('palettes', cur)) return;
+  $('#palettes').innerHTML = INIT.palettes.map((p) => `<button data-pal="${p.id}" class="${p.id === cur ? 'on' : ''}"><span class="dots">${p.colors.map((c) => `<i style="background:${c}"></i>`).join('')}</span>${esc(p.name)}</button>`).join('')
+    + `<button data-pal="" class="${cur ? '' : 'on'}">Las de cada efecto</button>`;
 }
 
 function renderSel() {
   const all = lights(), have = new Set(all);
   if (sel === null) sel = new Set(all);
   for (const i of [...sel]) if (!have.has(i)) sel.delete(i);
-  const present = [...new Set(all.map(typeOf))];
+  const grps = lightGroups();
   const looks = all.map((i) => [i, tileColor(i)]);
-  if (!changed('sel', [all, [...sel], looks, fixtures().map((f) => f.name)])) return;
+  if (!changed('sel', [all, [...sel], looks, fixtures().map((f) => f.name), grps])) return;
   let count = {};
   const tile = (i) => {
-    const t = typeOf(i), n = (count[t] = (count[t] || 0) + 1), f = fx(i);
-    const word = t === 'cabezal' ? 'Cabezal' : t === 'par' ? 'Par' : (TYPE_LABEL[t] || 'Equipo').replace(/s$/, '');
+    const gname = groupName(i), n = (count[gname] = (count[gname] || 0) + 1), f = fx(i);
+    const word = gname;
     return `<button class="fxt ${sel.has(i) ? 'on' : ''}" data-fid="${i}" aria-pressed="${sel.has(i)}" title="${esc(f.name)}" style="--lc:${tileColor(i)}">
       <b>${n}</b><small>${esc(word)}</small></button>`;
   };
@@ -275,14 +303,14 @@ function renderSel() {
     const mov = box.dataset.sel === 'mov';
     const ids = mov ? movers() : all;
     const on = (k) => {
-      const g = k === 'all' ? ids : k === 'none' ? [] : ofType(k);
+      const g = k === 'all' ? ids : k === 'none' ? [] : groupIdsOf(k.slice(4));
       const cur = ids.filter((i) => sel.has(i));
       return cur.length === g.length && g.every((i) => sel.has(i));
     };
     const groups = mov ? [['all', 'Todos los cabezales'], ['none', 'Ninguno']]
-      : [['all', 'Todos'], ...present.map((t) => [t, TYPE_LABEL[t] || t]), ['none', 'Ninguno']];
+      : [['all', 'Todos'], ...grps.map((g) => ['grp:' + g.name, g.name]), ['none', 'Ninguno']];
     box.innerHTML = `<div class="chips">${groups.map(([k, l]) => `<button data-g="${k}" class="${on(k) ? 'on' : ''}">${esc(l)}</button>`).join('')}</div>
-      ${[...new Set(ids.map(typeOf))].map((t) => `<div class="tiles">${ids.filter((i) => typeOf(i) === t).map(tile).join('')}</div>`).join('')}`;
+      ${[...new Set(ids.map(groupName))].map((g) => `<div class="tiles">${ids.filter((i) => groupName(i) === g).map(tile).join('')}</div>`).join('')}`;
   }
 }
 // color actual de cada equipo para la rayita del botón

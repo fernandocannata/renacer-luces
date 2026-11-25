@@ -77,6 +77,7 @@ const ordered = (ids) => fixtures().map((f) => f.id).filter((i) => ids.has ? ids
 const selIds = () => ordered(sel);
 const selWith = (cap) => selIds().filter((i) => capsOf(i).has(cap));
 const lookOf = (id) => (S && S.look[id]) || {};
+const groupOf = (id) => ((S && S.groups) || []).find((g) => g.ids.includes(id))?.name || TYPE_LABEL[typeOf(id)] || '';
 const firstVal = (cap, key) => { const i = selWith(cap)[0]; return i ? lookOf(i)[key] : undefined; };
 
 function hexToRgb(h) { h = h.replace('#', ''); return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16) / 255); }
@@ -120,6 +121,8 @@ function onSync(s) {
   renderPatch();
   renderProbar();
   renderShow();
+  renderFaders();
+  renderPalettes();
 }
 
 function onLive(d) {
@@ -150,6 +153,29 @@ function onLive(d) {
   if (S && d.cue !== S.cue_index) { S.cue_index = d.cue; sigs.cues = null; renderCues(); }
   drawXYPoints();
   drawAudience();
+}
+
+
+/* ------------------------------------------------------------ faders */
+let fdBank = (() => { try { return localStorage.getItem('fdBank') || 'grupos'; } catch (e) { return 'grupos'; } })();
+function renderFaders() {
+  if (!S || !INIT) return;
+  for (const b of $$('#fdTabs button')) b.classList.toggle('on', b.dataset.bank === fdBank);
+  const ids = selIds();
+  const defs = window.Faders.defs(fdBank, { S, ids, capsOf, lookOf, api, sendLatest });
+  $('#fdHint').textContent = fdBank === 'sel' && !ids.length ? 'Elegí equipos en el escenario: acá aparecen sus faders (intensidad, mezcla de color, strobo, altura…).'
+    : fdBank === 'sel' && !defs.length ? 'Lo elegido no tiene nada para manejar con faders.' : '';
+  window.Faders.render($('#fdBank'), defs);
+}
+
+/* ------------------------------------------------------------ paletas rápidas */
+function renderPalettes() {
+  if (!S || !INIT || !INIT.palettes) return;
+  const cur = S.settings.paleta || null;
+  if (!changed('palettes', cur)) return;
+  $('#palettes').innerHTML = INIT.palettes.map((p) => `<button data-pal="${p.id}" class="${p.id === cur ? 'on' : ''}" title="Colores de todos los efectos de color">
+      <span class="dots">${p.colors.map((c) => `<i style="background:${c}"></i>`).join('')}</span>${esc(p.name)}</button>`).join('')
+    + `<button data-pal="" class="${cur ? '' : 'on'}">Las de cada efecto</button>`;
 }
 
 /* ------------------------------------------------------------ barra superior */
@@ -280,12 +306,14 @@ function iconOf(f) {
 }
 
 function renderTiles() {
-  const sig = fixtures().map((f) => [f.id, f.name, f.profile, f.icono, PROF[f.profile]?.icono]);
+  const sig = [fixtures().map((f) => [f.id, f.name, f.profile, f.icono, PROF[f.profile]?.icono]), S.groups];
   if (changed('tiles', sig)) {
-    const groups = {};
-    for (const f of fixtures()) (groups[typeOf(f.id)] ||= []).push(f);
-    const order = (t) => (RIG_ORDER.includes(t) ? RIG_ORDER.indexOf(t) : RIG_ORDER.length - 1.5);
-    const rigTypes = Object.keys(groups).filter((t) => t !== 'humo').sort((a, b) => order(a) - order(b));
+    // una fila de truss por grupo (Trípode, Perimetral, Cabezales…); arriba los pares, abajo los cabezales
+    const groups = {}, gtype = {};
+    for (const g of (S.groups || [])) { groups[g.name] = g.ids.map(fx).filter(Boolean); gtype[g.name] = g.tipo; }
+    const order = (name) => { const t = gtype[name]; return RIG_ORDER.includes(t) ? RIG_ORDER.indexOf(t) : RIG_ORDER.length - 1.5; };
+    const humo = Object.keys(groups).filter((g) => gtype[g] === 'humo').flatMap((g) => groups[g]);
+    const rigTypes = Object.keys(groups).filter((g) => gtype[g] !== 'humo').sort((a, b) => order(a) - order(b));
     const tileHtml = (f, i) => {
       const t = typeOf(f.id), ic = iconOf(f), info = ICONS[ic];
       return `<button class="tile t-${t} i-${ic} ${info.mover ? 'mover' : ''}" data-id="${f.id}" title="${esc(f.name)} — dirección ${f.address}"
@@ -295,16 +323,15 @@ function renderTiles() {
     $('#tileGroups').innerHTML = Object.keys(groups).length ? `
       <div class="stage">
         <div class="haze"></div>
-        ${rigTypes.map((t) => `<div class="rig"><div class="truss"><span class="tag">${esc(TYPE_LABEL[t] || t)}</span></div>
+        ${rigTypes.map((t) => `<div class="rig"><div class="truss"><span class="tag">${esc(t)}</span></div>
             <div class="fixrow">${groups[t].map(tileHtml).join('')}</div></div>`).join('')}
-        <div class="apron">${groups.humo ? `<div class="rig floor-rig"><div class="fixrow">${groups.humo.map(tileHtml).join('')}</div></div>` : ''}</div>
+        <div class="apron">${humo.length ? `<div class="rig floor-rig"><div class="fixrow">${humo.map(tileHtml).join('')}</div></div>` : ''}</div>
       </div>`
       : `<div class="emptysel">El escenario está vacío. Agregá tus equipos en “Equipos y direcciones”.</div>`;
     layoutBeams();
-    const present = new Set(fixtures().map((f) => typeOf(f.id)));
     $('#groupChips').innerHTML = [
       ['all', 'Todos'],
-      ...TYPE_ORDER.filter((t) => present.has(t)).map((t) => ['type:' + t, TYPE_LABEL[t]]),
+      ...(S.groups || []).filter((g) => g.tipo !== 'humo').map((g) => ['grp:' + g.name, g.name]),
       ['odd', '1, 3, 5…'], ['even', '2, 4, 6…'], ['h1', 'Primera mitad'], ['h2', 'Segunda mitad'],
       ['inv', 'Invertir'], ['none', 'Ninguno'],
     ].map(([k, l]) => `<button class="ghost" data-g="${k}">${esc(l)}</button>`).join('');
@@ -363,6 +390,7 @@ function applyGroup(g) {
   if (g === 'all') next = lights;
   else if (g === 'none') next = [];
   else if (g.startsWith('type:')) next = fixtures().filter((f) => typeOf(f.id) === g.slice(5)).map((f) => f.id);
+  else if (g.startsWith('grp:')) next = ((S.groups || []).find((x) => x.name === g.slice(4)) || { ids: [] }).ids;
   else if (g === 'odd') next = base.filter((_, i) => i % 2 === 0);
   else if (g === 'even') next = base.filter((_, i) => i % 2 === 1);
   else if (g === 'h1') next = base.slice(0, Math.ceil(base.length / 2));
@@ -377,7 +405,7 @@ function selectionChanged() {
   $('#fan').value = 0; $('#fanVal').textContent = '0';
   sigs.prog = null;
   renderProgrammer();
-  if (S) renderMov();
+  if (S) { renderMov(); renderFaders(); }
 }
 
 /* ------------------------------------------------------------ programador */
@@ -673,7 +701,7 @@ function renderPatch() {
       ${ps.map((p) => `<option value="${p.id}">${esc(p.nombre)}${p.origen === 'usuario' ? ' (propio)' : ''}</option>`).join('')}</optgroup>`).join('');
     updateAddNote();
   }
-  if (!changed('patch', [S.fixtures, S.conflicts, Object.keys(PROF), Object.values(PROF).map((p) => p.icono)])) return;
+  if (!changed('patch', [S.fixtures, S.groups, S.conflicts, Object.keys(PROF), Object.values(PROF).map((p) => p.icono)])) return;
   const conf = S.conflicts.map((g) => g.map((i) => fx(i)?.name).join(' y '));
   $('#conflicts').innerHTML = conf.length ? `<div class="box errbox">Hay equipos que se pisan: ${esc(conf.join('; '))}. Cambiá una de las direcciones.</div>` : '';
   $('#patchRows').innerHTML = fixtures().map((f) => {
@@ -681,6 +709,7 @@ function renderPatch() {
     return `<tr>
       <td><div class="row" style="gap:2px;flex-wrap:nowrap"><button class="ghost small" data-fmv="${f.id}" data-d="-1" title="Subir">▲</button><button class="ghost small" data-fmv="${f.id}" data-d="1" title="Bajar">▼</button></div></td>
       <td><input type="text" value="${esc(f.name)}" data-fix="${f.id}" data-k="name"></td>
+      <td><input type="text" value="${esc(f.grupo || '')}" placeholder="${esc(groupOf(f.id))}" data-fix="${f.id}" data-k="grupo" list="groupList" size="11" aria-label="Grupo"></td>
       <td>${esc(p ? p.nombre : 'Perfil faltante: ' + f.profile)}${p && !p.verificado ? ' <span style="color:var(--warn)">(a verificar)</span>' : ''}</td>
       <td><select data-fix="${f.id}" data-k="icono" aria-label="Dibujo en el escenario">${Object.entries(ICONS).filter(([, v]) => !!v.mover === mover)
         .map(([k, v]) => `<option value="${k}" ${iconOf(f) === k ? 'selected' : ''}>${esc(v.label)}</option>`).join('')}</select></td>
@@ -689,7 +718,9 @@ function renderPatch() {
       <td>${mover ? `<label class="hint"><input type="checkbox" data-fix="${f.id}" data-k="invert_pan" ${f.invert_pan ? 'checked' : ''}> pan</label>
                      <label class="hint"><input type="checkbox" data-fix="${f.id}" data-k="invert_tilt" ${f.invert_tilt ? 'checked' : ''}> tilt</label>` : ''}</td>
       <td><button class="ghost small danger" data-fdel="${f.id}">Quitar</button></td></tr>`;
-  }).join('') || '<tr><td colspan="8" class="hint">No hay equipos en este show.</td></tr>';
+  }).join('') || '<tr><td colspan="9" class="hint">No hay equipos en este show.</td></tr>';
+  const names = new Set([...(S.groups || []).map((g) => g.name), 'Trípode', 'Perimetral', 'Cabezales', 'Pares LED']);
+  $('#groupList').innerHTML = [...names].map((n) => `<option value="${esc(n)}">`).join('');
   const use = new Array(513).fill(0);
   for (const f of fixtures()) { const n = PROF[f.profile]?.canales.length || 1; for (let a = f.address; a < f.address + n && a <= 512; a++) use[a]++; }
   $('#dmxbar').innerHTML = use.slice(1).map((u) => `<i class="${u > 1 ? 'x' : u ? 'u' : ''}"></i>`).join('');
@@ -912,6 +943,17 @@ function buildStatic() {
     el.addEventListener('pointerdown', on);
     el.addEventListener('pointerup', off); el.addEventListener('pointercancel', off); el.addEventListener('lostpointercapture', off);
   }
+
+  // faders
+  $('#fdTabs').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-bank]'); if (!b) return;
+    fdBank = b.dataset.bank; try { localStorage.setItem('fdBank', fdBank); } catch (err) { /* nada */ }
+    renderFaders();
+  });
+  $('#palettes').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-pal]'); if (!b) return;
+    api('palette', { id: b.dataset.pal || null });
+  });
 
   // equipos
   $('#tileGroups').addEventListener('click', (e) => {
@@ -1193,7 +1235,7 @@ function buildStatic() {
   // patch
   $('#addProfile').onchange = updateAddNote;
   $('#btnAddFix').onclick = async () => {
-    const r = await api('add_fixtures', { profile: $('#addProfile').value, count: +$('#addCount').value || 1, address: +$('#addAddr').value || null, name: $('#addName').value.trim() || null });
+    const r = await api('add_fixtures', { profile: $('#addProfile').value, count: +$('#addCount').value || 1, address: +$('#addAddr').value || null, name: $('#addName').value.trim() || null, grupo: $('#addGroup').value.trim() || null });
     if (r) { toast(r.length > 1 ? `Se agregaron ${r.length} equipos` : 'Equipo agregado'); $('#addAddr').value = ''; $('#addName').value = ''; }
   };
   const pr = $('#patchRows');
@@ -1343,7 +1385,7 @@ function buildStatic() {
   });
   document.addEventListener('keyup', (e) => { const k = e.key.toLowerCase(); if (holdKeys[k]) api('hold', { kind: holdKeys[k], on: false }); });
   // seguridad: si la ventana pierde el foco, se sueltan flash/strobo/humo
-  window.addEventListener('blur', () => { for (const k of ['flash', 'strobe', 'strobe2', 'humo']) if (S && S.holds.includes(k)) api('hold', { kind: k, on: false }); });
+  window.addEventListener('blur', () => { if (S) for (const k of S.holds) if (['flash', 'strobe', 'strobe2', 'humo'].includes(k) || k.startsWith('g:')) api('hold', { kind: k, on: false }); });
 }
 
 function xyMove(e) {

@@ -42,6 +42,8 @@
 
   <section data-tab="fx">
     <div class="selbox" data-sel></div>
+    <h2>Paleta de colores</h2>
+    <div class="palettes" id="palettes"></div>
     <h2 id="fxDimT">Intensidad</h2>
     <div class="grid presets" id="fxDim"></div>
     <h2 id="fxColT">Color</h2>
@@ -87,6 +89,16 @@
       <div class="row4"><button data-strb="0">No</button><button data-strb="0.3">Lento</button><button data-strb="0.65">Medio</button><button data-strb="1">Rápido</button></div>
     </div>
   </section>
+  <section data-tab="fad">
+    <div class="fdtabs" id="fdTabs" role="tablist">
+      <button data-bank="grupos" class="on" role="tab">Grupos</button>
+      <button data-bank="sel" role="tab">Selección</button>
+      <button data-bank="efx" role="tab">Efectos</button>
+    </div>
+    <div class="selbox" data-sel id="fdSel"></div>
+    <p class="hint" id="fdHint"></p>
+    <div class="fdbank" id="fdBank"></div>
+  </section>
 </main>
 
 <nav class="tabs">
@@ -95,6 +107,7 @@
   <button data-go="mov">Mover</button>
   <button data-go="col">Color</button>
   <button data-go="haz">Haz</button>
+  <button data-go="fad">Faders</button>
 </nav>
 
 <div id="toast"></div>
@@ -103,6 +116,7 @@
   <p class="hint" id="lostMsg">Reintentando…</p>
   <button id="changePc" hidden>Buscar otra PC</button>
 </div></div>
+<script src="faders.js"></script>
 <script src="remoto.js"></script>
 </body>
 </html>

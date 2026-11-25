@@ -217,7 +217,9 @@
       </div>
 
       <div class="ppanel" data-p="fx">
-        <h3 id="fxDimTitle" style="margin-top:4px">Intensidad</h3>
+        <h3 style="margin-top:4px">Paleta de colores <span class="hint">(cambia los colores de los efectos de color, también los que ya están andando)</span></h3>
+        <div class="palettes" id="palettes"></div>
+        <h3 id="fxDimTitle">Intensidad</h3>
         <div class="fxpresets" id="fxDim"></div>
         <h3 id="fxColTitle">Color</h3>
         <div class="fxpresets" id="fxCol"></div>
@@ -245,6 +247,17 @@
       <div class="row"><select id="cueScene" class="grow"></select><button class="ghost" id="btnAddCue">Agregar paso</button></div>
       <p class="hint">“Espera” en segundos hace que la secuencia avance sola. Vacío = espera el GO.</p>
     </div>
+
+    <div class="col fadercol">
+      <div class="colhead"><h2>Faders</h2><span class="hint">rueda del mouse encima</span></div>
+      <div class="fdtabs" id="fdTabs" role="tablist">
+        <button data-bank="grupos" class="on" role="tab">Grupos</button>
+        <button data-bank="sel" role="tab">Selección</button>
+        <button data-bank="efx" role="tab">Efectos</button>
+      </div>
+      <p class="hint fdhint" id="fdHint"></p>
+      <div class="fdbank" id="fdBank"></div>
+    </div>
   </section>
 
   <!-- ======================================================== PATCH -->
@@ -252,8 +265,9 @@
     <div class="page">
       <p class="hint">Cada equipo escucha a partir de su dirección DMX. Tiene que coincidir con la que configuraste en el display del equipo (por ejemplo d001), y el equipo tiene que estar en el mismo modo de canales que su perfil (por ejemplo 12CH). Si el equipo usa más canales que el perfil, sus últimos canales se pisan con el equipo de al lado: es una causa típica de reseteos solos.</p>
       <div id="conflicts"></div>
+      <datalist id="groupList"></datalist>
       <table>
-        <thead><tr><th></th><th>Nombre</th><th>Tipo</th><th>Dibujo</th><th>Dirección</th><th>Canales</th><th>Invertir</th><th></th></tr></thead>
+        <thead><tr><th></th><th>Nombre</th><th>Grupo</th><th>Tipo</th><th>Dibujo</th><th>Dirección</th><th>Canales</th><th>Invertir</th><th></th></tr></thead>
         <tbody id="patchRows"></tbody>
       </table>
       <div class="dmxbar" id="dmxbar" title="Uso del universo DMX (512 canales)"></div>
@@ -264,6 +278,7 @@
           <label class="hint">Cantidad <input type="number" id="addCount" min="1" max="32" value="1"></label>
           <label class="hint">Desde dirección <input type="number" id="addAddr" min="1" max="512" placeholder="auto"></label>
           <input type="text" id="addName" placeholder="Nombre (opcional)">
+          <input type="text" id="addGroup" placeholder="Grupo (opcional)" list="groupList" title="Por ejemplo Trípode o Perimetral">
           <button id="btnAddFix">Agregar</button>
         </div>
         <p class="hint" id="addNote"></p>
@@ -393,6 +408,7 @@
 
 <div id="toast"></div>
 <div id="lost"><div><h2 style="color:var(--text);font-size:20px">Se perdió la conexión con el programa</h2><p class="hint">Si lo cerraste, volvé a abrirlo. Reintentando…</p></div></div>
+<script src="faders.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

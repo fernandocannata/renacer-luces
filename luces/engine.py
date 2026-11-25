@@ -32,6 +32,11 @@ STROBE2_DIVS = (0.5, 1, 2, 4)        # destellos por tiempo
 STROBE2_MAX_HZ = 12.0                 # con ~30 cuadros/s, más rápido se pierde
 MAX_MOVES = 4                         # movimientos sumados como máximo
 
+# nombre de grupo por defecto según el tipo de equipo
+TYPE_GROUP = {"cabezal": "Cabezales", "par": "Pares LED", "strobo": "Strobos", "humo": "Humo", "dimmer": "Dimmers"}
+SPEED_RANGE = (0.25, 4.0)   # velocidad de efectos y movimientos: x0,25 a x4
+SIZE_MAX = 1.5              # tamaño de movimientos: hasta 150 %
+
 RIG_DEFAULT = {"front": {}, "span_x": 60.0, "span_y": 35.0, "flip_x": False, "flip_y": False,
                "reverse_order": False, "calibrated": False}
 
@@ -92,6 +97,11 @@ class Engine:
             st.setdefault("fade", 1.0)
             st.setdefault("cue_loop", False)
             st.setdefault("strobe2", {})
+            st.setdefault("submasters", {})     # grupo -> 0..1
+            st.setdefault("fx_speed", 1.0)
+            st.setdefault("mov_speed", 1.0)
+            st.setdefault("mov_size", 1.0)
+            st.setdefault("paleta", None)
             for k, v in STROBE2_DEFAULT.items():
                 st["strobe2"].setdefault(k, v)
             self.show = show
@@ -129,6 +139,57 @@ class Engine:
             if f["id"] == fid:
                 return f
         return None
+
+    def group_of(self, fid):
+        """Grupo del equipo: el que le puso el usuario o, si no, según su tipo."""
+        f = self.fixture(fid)
+        if not f:
+            return ""
+        g = (f.get("grupo") or "").strip()
+        if g:
+            return g
+        prof = self.lib.get(f["profile"]) or {}
+        t = prof.get("tipo", "otro")
+        return TYPE_GROUP.get(t, t.capitalize())
+
+    def groups(self):
+        """Grupos en el orden en que aparecen: [{name, ids, tipo}]."""
+        out = {}
+        for f in self.show["fixtures"]:
+            g = self.group_of(f["id"])
+            prof = self.lib.get(f["profile"]) or {}
+            e = out.setdefault(g, {"name": g, "ids": [], "tipo": prof.get("tipo", "otro")})
+            e["ids"].append(f["id"])
+        return list(out.values())
+
+    def set_submaster(self, group, value):
+        with self.lock:
+            self.show["settings"]["submasters"][str(group)[:40]] = clamp(float(value))
+            self.changed()
+
+    def set_globals(self, **kw):
+        """Velocidad de efectos/movimientos y tamaño de movimientos (los faders de Efectos)."""
+        with self.lock:
+            st = self.show["settings"]
+            for k in ("fx_speed", "mov_speed"):
+                if k in kw:
+                    st[k] = round(clamp(float(kw[k]), *SPEED_RANGE), 3)
+            if "mov_size" in kw:
+                st["mov_size"] = round(clamp(float(kw["mov_size"]), 0.0, SIZE_MAX), 3)
+            self.changed()
+
+    def set_palette(self, pid):
+        """Paleta rápida: cambia los colores de los efectos de color que están andando."""
+        with self.lock:
+            pal = {k: cols for k, _, cols in efectos.PALETTES}
+            if pid and pid not in pal:
+                raise ValueError("Paleta desconocida")
+            self.show["settings"]["paleta"] = pid or None
+            if pid:
+                for fx in self.fx:
+                    if fx["type"] in efectos.PALETTE_TYPES:
+                        fx["colors"] = list(pal[pid])
+            self.changed()
 
     def profile_of(self, fid):
         f = self.fixture(fid)
@@ -178,6 +239,8 @@ class Engine:
     # ------------------------------------------------- programación ---
     def set_attrs(self, ids, attrs):
         with self.lock:
+            if {"r", "g", "b", "w"} & set(attrs):
+                self._drop_fx(ids, "color")  # mezclar a mano manda sobre los efectos de color
             for fid in ids:
                 for k, v in attrs.items():
                     if k in CONTINUOUS or k == "strobe":
@@ -548,6 +611,9 @@ class Engine:
                 fx.update(frontal.DEFAULTS)
                 fx["name"] = str((params or {}).get("name") or FX_TYPES[ftype][1])[:40]
             fx.update({k: v for k, v in (params or {}).items() if k in fx and k not in ("id", "ids", "type")})
+            pid = self.show["settings"].get("paleta")
+            if pid and ftype in efectos.PALETTE_TYPES:
+                fx["colors"] = list({k: c for k, _, c in efectos.PALETTES}[pid])
             self.fx.append(fx)
             if fam == "dim" or ftype.startswith("f_"):  # sobre equipos apagados no se vería
                 for fid in ids:
@@ -580,16 +646,26 @@ class Engine:
             self.changed()
 
     def _fx_rate(self, fx):
+        st = self.show["settings"]
+        mult = st.get("mov_speed" if FX_TYPES.get(fx["type"], ("",))[0] == "pos" else "fx_speed", 1.0)
+        if fx["type"] in efectos.ONCE:
+            mult = 1.0  # la subida dura lo que dice (16 tiempos), para caer justo en el drop
         if fx.get("sync", True):
-            return (self.bpm / 60.0) / max(float(fx.get("beats", 4)), 0.25)
-        return max(float(fx.get("hz", 0.5)), 0.0)
+            return (self.bpm / 60.0) / max(float(fx.get("beats", 4)), 0.25) * mult
+        return max(float(fx.get("hz", 0.5)), 0.0) * mult
 
     def _apply_fx(self, cur, dt):
         live = set()
+        done = []
+        msize = float(self.show["settings"].get("mov_size", 1.0))
         for fx in self.fx:
             live.add(fx["id"])
             ph = self.fx_phase.get(fx["id"], 0.0) + dt * self._fx_rate(fx)
             self.fx_phase[fx["id"]] = ph
+            if fx["type"] in efectos.ONCE and ph >= 1.0:
+                done.append(fx["id"])
+            if msize != 1.0 and FX_TYPES.get(fx["type"], ("",))[0] == "pos":
+                fx = dict(fx, size=float(fx.get("size", 0.5)) * msize)
             ids = [i for i in fx["ids"] if i in cur]
             if fx.get("reverse"):
                 ids = ids[::-1]
@@ -642,6 +718,14 @@ class Engine:
         for k in list(self.fx_phase):
             if k not in live:
                 del self.fx_phase[k]
+        if done:  # la subida terminó: queda todo prendido, listo para el drop
+            ended = [f for f in self.fx if f["id"] in done]
+            self.fx = [f for f in self.fx if f["id"] not in done]
+            for f in ended:
+                for fid in f["ids"]:
+                    if fid in self.look and "dim" in self.look[fid]:
+                        self.look[fid]["dim"] = 1.0
+            self.changed()
 
     # -------------------------------------------------------- escenas ---
     def save_scene(self, name, scene_id=None, color=None):
@@ -925,7 +1009,7 @@ class Engine:
             a += 1
         return None
 
-    def add_fixtures(self, profile_id, count=1, address=None, name=None):
+    def add_fixtures(self, profile_id, count=1, address=None, name=None, grupo=None):
         with self.lock:
             prof = self.lib.get(profile_id)
             if not prof:
@@ -943,6 +1027,8 @@ class Engine:
                 self.show["fixtures"].append({"id": fid, "name": "%s %d" % (base, existing + k + 1),
                                               "profile": profile_id, "address": addr,
                                               "invert_pan": False, "invert_tilt": False})
+                if grupo:
+                    self.show["fixtures"][-1]["grupo"] = str(grupo).strip()[:40]
                 self.look[fid] = default_look(prof)
                 created.append(fid)
                 addr = addr + nch
@@ -966,6 +1052,12 @@ class Engine:
             for k in ("invert_pan", "invert_tilt"):
                 if k in kw:
                     f[k] = bool(kw[k])
+            if "grupo" in kw:
+                g = str(kw["grupo"] or "").strip()[:40]
+                if g:
+                    f["grupo"] = g
+                else:
+                    f.pop("grupo", None)
             if "icono" in kw:
                 f["icono"] = str(kw["icono"])[:20] if kw["icono"] else None
             if "profile" in kw and self.lib.get(kw["profile"]):
@@ -1034,6 +1126,7 @@ class Engine:
             frame = bytearray(512)
             preview = {}
             soft_strobe_on = frac(now * 12.0) < 0.5
+            subs = self.show["settings"].get("submasters", {})
             for f in self.show["fixtures"]:
                 prof = self.lib.get(f["profile"])
                 v = cur.get(f["id"])
@@ -1042,8 +1135,12 @@ class Engine:
                 c = caps(prof)
                 v = dict(v)
                 light = "dim" in v
+                grp = self.group_of(f["id"])
                 if light:
-                    v["dim"] = v["dim"] * self.master * (0.0 if self.blackout else 1.0)
+                    sub = subs.get(grp, 1.0)
+                    v["dim"] = v["dim"] * self.master * sub * (0.0 if self.blackout else 1.0)
+                if light and ("g:" + grp) in self.holds:  # Flash del grupo: a pleno con su color
+                    v["dim"] = 1.0 * (0.0 if self.blackout else 1.0)
                 if "flash" in self.holds and light:
                     v["dim"] = 1.0
                     apply_color(prof, v, (0, 0, 0, 1))
@@ -1262,6 +1359,6 @@ class Engine:
                 "cue_auto": self.cue_next_at is not None,
                 "test": {str(k): v for k, v in self.test.items()},
                 "conflicts": self.conflicts(),
-                "rig": self.rig(), "movers": self.movers(), "movers_xy": self.movers_xy(), "can_undo_clear": self._undo is not None,
+                "rig": self.rig(), "movers": self.movers(), "movers_xy": self.movers_xy(), "groups": self.groups(), "can_undo_clear": self._undo is not None,
                 "version": self.version,
             })

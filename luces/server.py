@@ -60,7 +60,7 @@ from .fixtures import CHANNEL_ATTRS, PALETTE, Library
 from .storage import Storage, base_dir, default_show, safe_name
 
 APP_NAME = "Renacer LightShow"
-APP_VERSION = "0.8"
+APP_VERSION = "2.1"
 
 
 def _read_build():
@@ -81,12 +81,12 @@ APP_BUILD = _read_build()
 REMOTE_COMMANDS = {
     "set_attrs", "set_color", "set_wheel", "set_position", "set_positions", "fan", "locate", "clear",
     "add_fx", "update_fx", "remove_fx", "recall_scene", "recall_position", "front_layout", "front_height",
-    "go", "back", "stop_cues", "master", "blackout", "hold", "tap", "bpm", "sync_set", "strobe2_set",
+    "go", "back", "stop_cues", "master", "blackout", "hold", "submaster", "fx_globals", "palette", "show_settings", "tap", "bpm", "sync_set", "strobe2_set",
     "clear_all", "undo_clear", "wake",
 }
 
 
-REMOTE_ASSETS = {"/", "/remoto", "/remoto.html", "/remoto.css", "/remoto.js", "/favicon.png", "/icono.png"}
+REMOTE_ASSETS = {"/", "/remoto", "/remoto.html", "/remoto.css", "/remoto.js", "/faders.js", "/favicon.png", "/icono.png"}
 
 
 def is_local(ip):
@@ -213,6 +213,7 @@ class App:
             "fx_types": {k: {"family": v[0], "name": v[1]} for k, v in FX_TYPES.items()},
             "frontal": frontal.catalog(),
             "efectos": efectos.catalog(),
+            "palettes": [{"id": k, "name": n, "colors": c} for k, n, c in efectos.PALETTES],
             "size_labels": {**efectos.SIZE_LABEL, "f_canon": "Recorrido"},
             "channel_attrs": CHANNEL_ATTRS,
             "shows": self.storage.list_shows(),
@@ -305,9 +306,19 @@ class App:
         elif cmd == "blackout":
             e.set_blackout(c["on"])
         elif cmd == "hold":
-            if c.get("kind") not in ("flash", "strobe", "strobe2", "humo"):
+            kind = str(c.get("kind"))
+            if kind.startswith("g:"):  # Flash de un grupo
+                if kind[2:] not in {g["name"] for g in e.groups()}:
+                    raise ValueError("Grupo desconocido")
+            elif kind not in ("flash", "strobe", "strobe2", "humo"):
                 raise ValueError("Botón desconocido")
             e.set_hold(c["kind"], c["on"])
+        elif cmd == "submaster":
+            e.set_submaster(c["group"], c["value"])
+        elif cmd == "fx_globals":
+            e.set_globals(**{k: c[k] for k in ("fx_speed", "mov_speed", "mov_size") if k in c})
+        elif cmd == "palette":
+            e.set_palette(c.get("id"))
         elif cmd == "strobe2_set":
             e.set_strobe2(**{k: c[k] for k in ("sync", "div", "hz", "white") if k in c})
         elif cmd == "sync_set":
@@ -341,9 +352,10 @@ class App:
                     st["cue_loop"] = bool(c["cue_loop"])
                 e.changed()
         elif cmd == "add_fixtures":
-            return e.add_fixtures(c["profile"], c.get("count", 1), c.get("address") or None, c.get("name") or None)
+            return e.add_fixtures(c["profile"], c.get("count", 1), c.get("address") or None, c.get("name") or None,
+                                  c.get("grupo") or None)
         elif cmd == "update_fixture":
-            e.update_fixture(c["id"], **{k: c[k] for k in ("name", "address", "invert_pan", "invert_tilt", "profile", "icono") if k in c})
+            e.update_fixture(c["id"], **{k: c[k] for k in ("name", "address", "invert_pan", "invert_tilt", "profile", "icono", "grupo") if k in c})
         elif cmd == "remove_fixture":
             e.remove_fixture(c["id"])
         elif cmd == "move_fixture":
