@@ -115,3 +115,14 @@ def test_color_al_beat_cambia_en_cada_tiempo():
     fx = {"type": "color_beat", "beats": 4, "spread": 0.0, "colors": ["#ff0000", "#00ff00", "#0000ff", "#ffffff"]}
     seen = [efectos.fx_eval(fx, 0, 4, b / 4 + 0.01, "s")[1] for b in range(4)]
     assert len({tuple(c) for c in seen}) == 4
+
+
+def test_orden_de_las_filas_del_escenario():
+    e = make()
+    perimetral(e)
+    names = lambda: [g["name"] for g in e.groups()]
+    assert names() == ["Trípode", "Perimetral", "Cabezales"]  # arriba los pares, abajo los cabezales
+    e.set_rows(["Trípode", "Cabezales", "Perimetral"])
+    assert names() == ["Trípode", "Cabezales", "Perimetral"]
+    e.update_fixture(PAR[0], grupo="Nuevo")  # un grupo nuevo va al final hasta que se acomode
+    assert names()[-1] == "Nuevo"

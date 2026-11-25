@@ -152,15 +152,30 @@ class Engine:
         t = prof.get("tipo", "otro")
         return TYPE_GROUP.get(t, t.capitalize())
 
+    ROW_RANK = {"par": 0, "strobo": 1, "dimmer": 2, "cabezal": 3, "humo": 9}
+
     def groups(self):
-        """Grupos en el orden en que aparecen: [{name, ids, tipo}]."""
+        """Grupos en el orden de las filas del escenario (de arriba hacia abajo): [{name, ids, tipo}].
+        Por defecto arriba los pares y abajo los cabezales; el usuario puede reordenarlas."""
         out = {}
         for f in self.show["fixtures"]:
             g = self.group_of(f["id"])
             prof = self.lib.get(f["profile"]) or {}
             e = out.setdefault(g, {"name": g, "ids": [], "tipo": prof.get("tipo", "otro")})
             e["ids"].append(f["id"])
-        return list(out.values())
+        groups = sorted(out.values(), key=lambda g: self.ROW_RANK.get(g["tipo"], 5))
+        rows = self.show["settings"].get("filas") or []
+        if rows:
+            pos = {name: i for i, name in enumerate(rows)}
+            base = {g["name"]: i for i, g in enumerate(groups)}
+            groups.sort(key=lambda g: (g["tipo"] == "humo", pos.get(g["name"], len(rows) + base[g["name"]])))
+        return groups
+
+    def set_rows(self, names):
+        """Orden de las filas de truss en el escenario (nombres de grupo, de arriba hacia abajo)."""
+        with self.lock:
+            self.show["settings"]["filas"] = [str(n)[:40] for n in names][:30]
+            self.changed()
 
     def set_submaster(self, group, value):
         with self.lock:

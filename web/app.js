@@ -311,9 +311,9 @@ function renderTiles() {
     // una fila de truss por grupo (Trípode, Perimetral, Cabezales…); arriba los pares, abajo los cabezales
     const groups = {}, gtype = {};
     for (const g of (S.groups || [])) { groups[g.name] = g.ids.map(fx).filter(Boolean); gtype[g.name] = g.tipo; }
-    const order = (name) => { const t = gtype[name]; return RIG_ORDER.includes(t) ? RIG_ORDER.indexOf(t) : RIG_ORDER.length - 1.5; };
+    // el orden de las filas lo da el programa (se cambia con las flechitas de cada truss)
     const humo = Object.keys(groups).filter((g) => gtype[g] === 'humo').flatMap((g) => groups[g]);
-    const rigTypes = Object.keys(groups).filter((g) => gtype[g] !== 'humo').sort((a, b) => order(a) - order(b));
+    const rigTypes = Object.keys(groups).filter((g) => gtype[g] !== 'humo');
     const tileHtml = (f, i) => {
       const t = typeOf(f.id), ic = iconOf(f), info = ICONS[ic];
       return `<button class="tile t-${t} i-${ic} ${info.mover ? 'mover' : ''}" data-id="${f.id}" title="${esc(f.name)} — dirección ${f.address}"
@@ -323,7 +323,11 @@ function renderTiles() {
     $('#tileGroups').innerHTML = Object.keys(groups).length ? `
       <div class="stage">
         <div class="haze"></div>
-        ${rigTypes.map((t) => `<div class="rig"><div class="truss"><span class="tag">${esc(t)}</span></div>
+        ${rigTypes.map((t, i) => `<div class="rig"><div class="truss"><span class="tag">
+              <button class="rowname" data-rowsel="${esc(t)}" title="Elegir todo ${esc(t)}">${esc(t)}</button>
+              ${rigTypes.length > 1 ? `<button class="rowmv" data-rowmv="${esc(t)}" data-dir="-1" ${i === 0 ? 'disabled' : ''} aria-label="Subir la fila ${esc(t)}" title="Subir esta fila">▲</button>
+              <button class="rowmv" data-rowmv="${esc(t)}" data-dir="1" ${i === rigTypes.length - 1 ? 'disabled' : ''} aria-label="Bajar la fila ${esc(t)}" title="Bajar esta fila">▼</button>` : ''}
+            </span></div>
             <div class="fixrow">${groups[t].map(tileHtml).join('')}</div></div>`).join('')}
         <div class="apron">${humo.length ? `<div class="rig floor-rig"><div class="fixrow">${humo.map(tileHtml).join('')}</div></div>` : ''}</div>
       </div>`
@@ -957,6 +961,17 @@ function buildStatic() {
 
   // equipos
   $('#tileGroups').addEventListener('click', (e) => {
+    const mv = e.target.closest('[data-rowmv]');
+    if (mv) {  // subir o bajar una fila de truss
+      const order = (S.groups || []).filter((g) => g.tipo !== 'humo').map((g) => g.name);
+      const i = order.indexOf(mv.dataset.rowmv), j = i + +mv.dataset.dir;
+      if (i < 0 || j < 0 || j >= order.length) return;
+      [order[i], order[j]] = [order[j], order[i]];
+      api('rig_rows', { order });
+      return;
+    }
+    const rs = e.target.closest('[data-rowsel]');
+    if (rs) { applyGroup('grp:' + rs.dataset.rowsel); return; }
     const t = e.target.closest('.tile'); if (!t) return;
     sel.has(t.dataset.id) ? sel.delete(t.dataset.id) : sel.add(t.dataset.id);
     selectionChanged();

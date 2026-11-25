@@ -60,7 +60,7 @@ from .fixtures import CHANNEL_ATTRS, PALETTE, Library
 from .storage import Storage, base_dir, default_show, safe_name
 
 APP_NAME = "Renacer LightShow"
-APP_VERSION = "2.1"
+APP_VERSION = "2.2"
 
 
 def _read_build():
@@ -313,6 +313,8 @@ class App:
             elif kind not in ("flash", "strobe", "strobe2", "humo"):
                 raise ValueError("Botón desconocido")
             e.set_hold(c["kind"], c["on"])
+        elif cmd == "rig_rows":
+            e.set_rows(c.get("order") or [])
         elif cmd == "submaster":
             e.set_submaster(c["group"], c["value"])
         elif cmd == "fx_globals":
