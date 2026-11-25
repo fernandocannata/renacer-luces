@@ -126,3 +126,31 @@ def test_orden_de_las_filas_del_escenario():
     assert names() == ["Trípode", "Cabezales", "Perimetral"]
     e.update_fixture(PAR[0], grupo="Nuevo")  # un grupo nuevo va al final hasta que se acomode
     assert names()[-1] == "Nuevo"
+
+
+def test_truss_y_piso_editables():
+    e = make()
+    perimetral(e)
+    name = e.add_row("truss")
+    assert name == "Truss 1" and e.groups()[-1] == {"name": "Truss 1", "ids": [], "tipo": "vacio", "lugar": "truss"}
+    # la perimetral al piso
+    e.update_row("Perimetral", lugar="piso")
+    assert next(g for g in e.groups() if g["name"] == "Perimetral")["lugar"] == "piso"
+    # arrastrar el par 1 al truss nuevo, y el par 2 antes que él
+    e.place_fixture(PAR[0], "Truss 1")
+    e.place_fixture(PAR[1], "Truss 1", before=PAR[0])
+    assert next(g for g in e.groups() if g["name"] == "Truss 1")["ids"] == [PAR[1], PAR[0]]
+    # renombrar lleva los equipos y el fader
+    e.set_submaster("Truss 1", 0.3)
+    e.update_row("Truss 1", new_name="Frente")
+    g = next(g for g in e.groups() if g["name"] == "Frente")
+    assert g["ids"] == [PAR[1], PAR[0]] and e.show["settings"]["submasters"]["Frente"] == 0.3
+    # una fila con equipos no se borra; vacía sí
+    try:
+        e.remove_row("Frente")
+        assert False
+    except ValueError:
+        pass
+    e.add_row("piso", "Vacía")
+    e.remove_row("Vacía")
+    assert all(g["name"] != "Vacía" for g in e.groups())

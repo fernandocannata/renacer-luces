@@ -696,3 +696,45 @@ code { font: 600 12.5px var(--num); background: var(--ctrl); padding: 1px 6px; b
 .rig .tag button:hover:not(:disabled) { color: var(--text); background: rgba(255,255,255,.08); }
 .rig .tag .rowmv { font-size: 10px; padding: 2px 5px; opacity: .7; }
 .rig .tag .rowmv:disabled { opacity: .2; cursor: default; }
+
+/* ------------------------------------------------ escenario editable ---- */
+#stageEdit.on { background: var(--amber); color: var(--amber-ink); }
+.stage .apron { height: auto; min-height: 104px; overflow: visible; }
+.stage .apron::before { overflow: hidden; }
+.rig .tag .rowname { color: var(--muted); }
+span.rowname { padding: 2px 6px; }
+/* filas en el piso: sin truss, los equipos parados tiran el haz para arriba */
+.rig.floor-rig { position: relative; z-index: 2; padding: 26px 0 8px; }
+.rig.floor-rig .fixrow { justify-content: space-evenly; gap: 2px; padding-left: 0; }
+.rig .ftag { position: absolute; left: 4px; top: 4px; }
+.floor-rig .tile .body { transform: scaleY(-1); }
+.stage .floor-rig .tile .beam { top: auto; bottom: calc(100% - 16px); transform-origin: 50% 100%;
+  clip-path: polygon(0 0, 100% 0, calc(50% + 4px) 100%, calc(50% - 4px) 100%);
+  background: linear-gradient(0deg, var(--c) 0%, color-mix(in srgb, var(--c) 55%, transparent) 45%, transparent 96%); }
+.stage .floor-rig .tile.i-humo .body { transform: none; }
+/* modo edición */
+.stage.editing { outline: 1px dashed rgba(217, 165, 91, .55); outline-offset: -1px; }
+.stage.editing .tile { cursor: grab; }
+.stage.editing .tile .beam { opacity: 0 !important; }
+.tile .nm small { display: block; font: 500 10px var(--num); color: var(--muted); }
+.tile.dragging { opacity: .35; }
+.tile.drop-before { box-shadow: -3px 0 0 var(--amber); }
+.fixrow.drop-end { box-shadow: inset -3px 0 0 var(--amber); }
+.stage.editing .rig .tag { flex-wrap: wrap; gap: 4px; padding: 3px; background: rgba(12, 9, 15, .92); border: 1px solid var(--line); }
+.stage.editing { padding-top: 76px; }
+.stage.editing .rig .truss .tag { top: auto; bottom: calc(100% + 6px); right: 4px; }
+.stage.editing .rig { margin-bottom: 96px; }
+.stage.editing .rig.floor-rig { padding-top: 70px; margin-bottom: 0; }
+.stage.editing .rig .ftag { right: 4px; }
+.rig .tag .rowin { width: auto; min-width: 0; padding: 3px 6px; font: 600 12px var(--num); background: var(--ctrl); border: 1px solid var(--line); border-radius: 4px; color: var(--text); }
+.rig .tag select { padding: 2px 4px; font: 500 12px var(--num); background: var(--ctrl); color: var(--text); border: 1px solid var(--line); border-radius: 4px; }
+.rig .tag .rowbtn { background: var(--ctrl); color: var(--text); padding: 3px 8px; font: 600 12px var(--num); }
+.rig .tag .rowdel { color: var(--red); }
+.dropme { flex: 1; text-align: center; padding: 22px 8px; border: 1px dashed var(--line); border-radius: 8px; color: var(--muted); font-size: 12.5px; }
+.rowadd { position: relative; z-index: 4; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; padding: 8px; border-radius: 8px; background: rgba(12, 9, 15, .95); border: 1px solid var(--amber); }
+.rowadd select { max-width: 100%; flex: 1 1 160px; }
+.rowadd input { width: 64px; }
+.rowadd label { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--muted); }
+.stagebar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; }
+.stagebar .hint { flex: 1 1 100%; margin: 0; order: 3; }
+.stagebar .primary { margin-left: auto; }

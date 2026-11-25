@@ -132,7 +132,7 @@
   function defs(bank, ctx) {
     const { S, ids, capsOf, lookOf, api, sendLatest } = ctx;
     const F = { speedFromV, vFromSpeed, speedText };
-    const groups = () => (S.groups || []).filter((g) => g.tipo !== 'humo');
+    const groups = () => (S.groups || []).filter((g) => g.tipo !== 'humo' && g.ids.length);
     if (bank === 'grupos') {
       return [{
         key: 'master', label: 'Master', color: '#d9a55b', value: S.master, text: pctTxt(S.master), fmt: pctTxt,

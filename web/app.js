@@ -305,43 +305,64 @@ function iconOf(f) {
   return mover ? 'beam' : t === 'strobo' ? 'strobo' : t === 'humo' ? 'humo' : 'tacho';
 }
 
+let stageEdit = false, addRowOpen = null;   // modo "Editar escenario" y fila con el formulario de agregar abierto
+function rowsOf(lugar) { return (S.groups || []).filter((g) => g.lugar === lugar); }
 function renderTiles() {
-  const sig = [fixtures().map((f) => [f.id, f.name, f.profile, f.icono, PROF[f.profile]?.icono]), S.groups];
+  const sig = [fixtures().map((f) => [f.id, f.name, f.profile, f.icono, f.address, PROF[f.profile]?.icono]), S.groups, stageEdit, addRowOpen];
   if (changed('tiles', sig)) {
-    // una fila de truss por grupo (Trípode, Perimetral, Cabezales…); arriba los pares, abajo los cabezales
-    const groups = {}, gtype = {};
-    for (const g of (S.groups || [])) { groups[g.name] = g.ids.map(fx).filter(Boolean); gtype[g.name] = g.tipo; }
-    // el orden de las filas lo da el programa (se cambia con las flechitas de cada truss)
-    const humo = Object.keys(groups).filter((g) => gtype[g] === 'humo').flatMap((g) => groups[g]);
-    const rigTypes = Object.keys(groups).filter((g) => gtype[g] !== 'humo');
+    // cada grupo es una fila: colgada de un truss o apoyada en el piso (se editan con "Editar escenario")
     const tileHtml = (f, i) => {
       const t = typeOf(f.id), ic = iconOf(f), info = ICONS[ic];
       return `<button class="tile t-${t} i-${ic} ${info.mover ? 'mover' : ''}" data-id="${f.id}" title="${esc(f.name)} — dirección ${f.address}"
-          style="--by:${(info.lens / 40 * 46).toFixed(1)}px;--spread:${info.spread}">
-          <span class="beam"></span>${fixtureSvg(ic)}<span class="nm">${i + 1}</span></button>`;
+          ${stageEdit ? 'draggable="true"' : ''} style="--by:${(info.lens / 40 * 46).toFixed(1)}px;--spread:${info.spread}">
+          <span class="beam"></span>${fixtureSvg(ic)}<span class="nm">${i + 1}${stageEdit ? `<small>d${f.address}</small>` : ''}</span></button>`;
     };
-    $('#tileGroups').innerHTML = Object.keys(groups).length ? `
-      <div class="stage">
+    const ctl = (g, list, i) => {
+      const n = esc(g.name);
+      if (!stageEdit) return g.ids.length ? `<button class="rowname" data-rowsel="${n}" title="Elegir todo ${n}">${n}</button>` : `<span class="rowname">${n}</span>`;
+      return `<input class="rowin" value="${n}" data-rowname="${n}" aria-label="Nombre de la fila" size="${Math.max(6, g.name.length + 1)}">
+        <select data-rowlugar="${n}" aria-label="Dónde va"><option value="truss" ${g.lugar === 'truss' ? 'selected' : ''}>Colgado</option><option value="piso" ${g.lugar === 'piso' ? 'selected' : ''}>En el piso</option></select>
+        <button class="rowmv" data-rowmv="${n}" data-dir="-1" ${i === 0 ? 'disabled' : ''} aria-label="Subir ${n}" title="Subir">▲</button>
+        <button class="rowmv" data-rowmv="${n}" data-dir="1" ${i === list.length - 1 ? 'disabled' : ''} aria-label="Bajar ${n}" title="Bajar">▼</button>
+        <button class="rowbtn" data-rowadd="${n}">+ Equipos</button>
+        ${g.ids.length ? '' : `<button class="rowbtn rowdel" data-rowdel="${n}">Quitar</button>`}`;
+    };
+    const profOpts = (g) => {
+      const last = g.ids.length ? fx(g.ids[g.ids.length - 1])?.profile : null;
+      return INIT.profiles.map((p) => `<option value="${esc(p.id)}" ${p.id === last ? 'selected' : ''}>${esc(p.nombre)}</option>`).join('');
+    };
+    const addForm = (g) => (stageEdit && addRowOpen === g.name ? `<div class="rowadd">
+        <select data-addprof aria-label="Tipo de equipo">${profOpts(g)}</select>
+        <label>Cant. <input type="number" min="1" max="16" value="1" data-addcount></label>
+        <label>Dirección <input type="number" min="1" max="512" placeholder="auto" data-addaddr></label>
+        <button class="primary" data-addgo="${esc(g.name)}">Agregar</button><button class="ghost" data-addcancel>Cancelar</button></div>` : '');
+    const fixrow = (g) => `<div class="fixrow" data-row="${esc(g.name)}">${g.ids.map(fx).filter(Boolean).map(tileHtml).join('')}
+        ${stageEdit && !g.ids.length ? '<span class="dropme">Arrastrá equipos acá o tocá “+ Equipos”</span>' : ''}</div>`;
+    const truss = rowsOf('truss'), piso = rowsOf('piso');
+    const any = (S.groups || []).length;
+    $('#tileGroups').innerHTML = any || stageEdit ? `
+      <div class="stage ${stageEdit ? 'editing' : ''}">
         <div class="haze"></div>
-        ${rigTypes.map((t, i) => `<div class="rig"><div class="truss"><span class="tag">
-              <button class="rowname" data-rowsel="${esc(t)}" title="Elegir todo ${esc(t)}">${esc(t)}</button>
-              ${rigTypes.length > 1 ? `<button class="rowmv" data-rowmv="${esc(t)}" data-dir="-1" ${i === 0 ? 'disabled' : ''} aria-label="Subir la fila ${esc(t)}" title="Subir esta fila">▲</button>
-              <button class="rowmv" data-rowmv="${esc(t)}" data-dir="1" ${i === rigTypes.length - 1 ? 'disabled' : ''} aria-label="Bajar la fila ${esc(t)}" title="Bajar esta fila">▼</button>` : ''}
-            </span></div>
-            <div class="fixrow">${groups[t].map(tileHtml).join('')}</div></div>`).join('')}
-        <div class="apron">${humo.length ? `<div class="rig floor-rig"><div class="fixrow">${humo.map(tileHtml).join('')}</div></div>` : ''}</div>
-      </div>`
-      : `<div class="emptysel">El escenario está vacío. Agregá tus equipos en “Equipos y direcciones”.</div>`;
+        ${truss.map((g, i) => `<div class="rig" data-row="${esc(g.name)}"><div class="truss"><span class="tag">${ctl(g, truss, i)}</span></div>
+            ${fixrow(g)}${addForm(g)}</div>`).join('')}
+        <div class="apron">${piso.map((g, i) => `<div class="rig floor-rig" data-row="${esc(g.name)}"><span class="tag ftag">${ctl(g, piso, i)}</span>
+            ${fixrow(g)}${addForm(g)}</div>`).join('')}</div>
+      </div>
+      ${stageEdit ? `<div class="stagebar"><button data-newrow="truss">+ Truss</button><button data-newrow="piso">+ Lugar en el piso</button>
+        <span class="hint">Arrastrá los equipos para pasarlos de fila o cambiarles el orden.</span><button class="primary" data-stagedone>Listo</button></div>` : ''}`
+      : `<div class="emptysel">El escenario está vacío. Tocá “Editar” para armarlo, o agregá equipos en “Equipos y direcciones”.</div>`;
     layoutBeams();
     $('#groupChips').innerHTML = [
       ['all', 'Todos'],
-      ...(S.groups || []).filter((g) => g.tipo !== 'humo').map((g) => ['grp:' + g.name, g.name]),
+      ...(S.groups || []).filter((g) => g.tipo !== 'humo' && g.ids.length).map((g) => ['grp:' + g.name, g.name]),
       ['odd', '1, 3, 5…'], ['even', '2, 4, 6…'], ['h1', 'Primera mitad'], ['h2', 'Segunda mitad'],
       ['inv', 'Invertir'], ['none', 'Ninguno'],
     ].map(([k, l]) => `<button class="ghost" data-g="${k}">${esc(l)}</button>`).join('');
+    $('#stageEdit').classList.toggle('on', stageEdit);
   }
   paintSelection();
 }
+
 
 /* dibujo de cada modelo, de frente, colgado del truss (viewBox 40×40) */
 function fixtureSvg(ic) {
@@ -374,9 +395,11 @@ function layoutBeams() {
   const st = $('.stage');
   if (!st) return;
   const floor = st.querySelector('.apron').getBoundingClientRect().top + 64;
+  const top = st.getBoundingClientRect().top;
   for (const t of $$('.tile', st)) {
     const r = t.getBoundingClientRect();
-    t.style.setProperty('--len', Math.max(40, floor - r.top - 40) + 'px');
+    const up = !!t.closest('.floor-rig');   // los del piso tiran el haz para arriba
+    t.style.setProperty('--len', Math.max(40, up ? r.top - top - 6 : floor - r.top - 40) + 'px');
   }
 }
 window.addEventListener('resize', () => layoutBeams());
@@ -960,23 +983,82 @@ function buildStatic() {
   });
 
   // equipos
-  $('#tileGroups').addEventListener('click', (e) => {
+  $('#stageEdit').onclick = () => { stageEdit = !stageEdit; addRowOpen = null; renderTiles(); };
+  $('#tileGroups').addEventListener('click', async (e) => {
     const mv = e.target.closest('[data-rowmv]');
-    if (mv) {  // subir o bajar una fila de truss
-      const order = (S.groups || []).filter((g) => g.tipo !== 'humo').map((g) => g.name);
-      const i = order.indexOf(mv.dataset.rowmv), j = i + +mv.dataset.dir;
-      if (i < 0 || j < 0 || j >= order.length) return;
-      [order[i], order[j]] = [order[j], order[i]];
-      api('rig_rows', { order });
+    if (mv) {  // subir o bajar una fila (entre las de su mismo lugar: truss o piso)
+      const all = (S.groups || []).map((g) => g.name);
+      const me = S.groups.find((g) => g.name === mv.dataset.rowmv);
+      const same = S.groups.filter((g) => g.lugar === me.lugar).map((g) => g.name);
+      const k = same.indexOf(me.name), other = same[k + +mv.dataset.dir];
+      if (!other) return;
+      const i = all.indexOf(me.name), j = all.indexOf(other);
+      [all[i], all[j]] = [all[j], all[i]];
+      api('rig_rows', { order: all });
       return;
     }
     const rs = e.target.closest('[data-rowsel]');
     if (rs) { applyGroup('grp:' + rs.dataset.rowsel); return; }
+    const nr = e.target.closest('[data-newrow]');
+    if (nr) { const name = await api('row_add', { lugar: nr.dataset.newrow }); if (name) toast(`“${name}” agregado: arrastrá equipos o tocá “+ Equipos”`); return; }
+    if (e.target.closest('[data-stagedone]')) { stageEdit = false; addRowOpen = null; renderTiles(); return; }
+    const ra = e.target.closest('[data-rowadd]');
+    if (ra) { addRowOpen = addRowOpen === ra.dataset.rowadd ? null : ra.dataset.rowadd; renderTiles(); return; }
+    if (e.target.closest('[data-addcancel]')) { addRowOpen = null; renderTiles(); return; }
+    const go = e.target.closest('[data-addgo]');
+    if (go) {
+      const box = go.closest('.rowadd');
+      const res = await api('add_fixtures', { profile: box.querySelector('[data-addprof]').value, count: +box.querySelector('[data-addcount]').value || 1,
+        address: +box.querySelector('[data-addaddr]').value || null, grupo: go.dataset.addgo });
+      if (res) { addRowOpen = null; toast(`${res.length} equipo${res.length > 1 ? 's' : ''} agregado${res.length > 1 ? 's' : ''} a ${go.dataset.addgo}`); }
+      return;
+    }
+    const rd = e.target.closest('[data-rowdel]');
+    if (rd) { api('row_remove', { name: rd.dataset.rowdel }); return; }
+    if (stageEdit) return;  // editando, tocar un equipo no lo elige (se arrastra)
     const t = e.target.closest('.tile'); if (!t) return;
     sel.has(t.dataset.id) ? sel.delete(t.dataset.id) : sel.add(t.dataset.id);
     selectionChanged();
   });
   $('#groupChips').addEventListener('click', (e) => { const b = e.target.closest('[data-g]'); if (b) applyGroup(b.dataset.g); });
+  // escenario: nombre y lugar de cada fila
+  $('#tileGroups').addEventListener('change', (e) => {
+    const n = e.target.closest('[data-rowname]');
+    if (n && n.value.trim() && n.value.trim() !== n.dataset.rowname) api('row_update', { name: n.dataset.rowname, new_name: n.value.trim() });
+    const l = e.target.closest('[data-rowlugar]');
+    if (l) api('row_update', { name: l.dataset.rowlugar, lugar: l.value });
+  });
+  $('#tileGroups').addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.matches('.rowin')) e.target.blur(); });
+  // arrastrar equipos entre filas
+  let dragId = null;
+  const clearDrop = () => $$('#tileGroups .drop-before, #tileGroups .drop-end').forEach((x) => x.classList.remove('drop-before', 'drop-end'));
+  const dropTarget = (e) => {
+    const rig = e.target.closest('.rig[data-row]'); if (!rig) return null;
+    const row = rig.querySelector('.fixrow');
+    const tiles = [...row.querySelectorAll('.tile')].filter((t) => t.dataset.id !== dragId);
+    const before = tiles.find((t) => { const r = t.getBoundingClientRect(); return e.clientX < r.left + r.width / 2; });
+    return { row, name: rig.dataset.row, before };
+  };
+  $('#tileGroups').addEventListener('dragstart', (e) => {
+    const t = e.target.closest('.tile'); if (!t || !stageEdit) return;
+    dragId = t.dataset.id; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', dragId);
+    t.classList.add('dragging');
+  });
+  $('#tileGroups').addEventListener('dragend', () => { dragId = null; clearDrop(); $$('#tileGroups .dragging').forEach((x) => x.classList.remove('dragging')); });
+  $('#tileGroups').addEventListener('dragover', (e) => {
+    if (!dragId) return;
+    const d = dropTarget(e); if (!d) return;
+    e.preventDefault(); e.dataTransfer.dropEffect = 'move';
+    clearDrop();
+    if (d.before) d.before.classList.add('drop-before'); else d.row.classList.add('drop-end');
+  });
+  $('#tileGroups').addEventListener('drop', (e) => {
+    if (!dragId) return;
+    const d = dropTarget(e); clearDrop(); if (!d) return;
+    e.preventDefault();
+    api('place_fixture', { id: dragId, row: d.name, before: d.before ? d.before.dataset.id : null });
+    dragId = null;
+  });
 
   // color e intensidad
   const needSel = () => { if (!sel.size) { toast('Primero elegí equipos'); return false; } return true; };

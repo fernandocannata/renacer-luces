@@ -60,7 +60,7 @@ from .fixtures import CHANNEL_ATTRS, PALETTE, Library
 from .storage import Storage, base_dir, default_show, safe_name
 
 APP_NAME = "Renacer LightShow"
-APP_VERSION = "2.2"
+APP_VERSION = "2.3"
 
 
 def _read_build():
@@ -315,6 +315,14 @@ class App:
             e.set_hold(c["kind"], c["on"])
         elif cmd == "rig_rows":
             e.set_rows(c.get("order") or [])
+        elif cmd == "row_add":
+            return e.add_row(c.get("lugar", "truss"), c.get("name"))
+        elif cmd == "row_update":
+            e.update_row(c["name"], c.get("new_name"), c.get("lugar"))
+        elif cmd == "row_remove":
+            e.remove_row(c["name"])
+        elif cmd == "place_fixture":
+            e.place_fixture(c["id"], c["row"], c.get("before"))
         elif cmd == "submaster":
             e.set_submaster(c["group"], c["value"])
         elif cmd == "fx_globals":

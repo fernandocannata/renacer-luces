@@ -76,7 +76,7 @@ const typeOf = (id) => PROF[fx(id)?.profile]?.tipo || 'dimmer';
 const lookOf = (id) => (S && S.look[id]) || {};
 const lights = () => fixtures().filter((f) => typeOf(f.id) !== 'humo').map((f) => f.id);
 const ofType = (t) => fixtures().filter((f) => typeOf(f.id) === t).map((f) => f.id);
-const lightGroups = () => ((S && S.groups) || []).filter((g) => g.tipo !== 'humo');
+const lightGroups = () => ((S && S.groups) || []).filter((g) => g.tipo !== 'humo' && g.ids.length);
 const groupIdsOf = (name) => (lightGroups().find((g) => g.name === name) || { ids: [] }).ids;
 const groupName = (id) => (lightGroups().find((g) => g.ids.includes(id)) || {}).name || TYPE_LABEL[typeOf(id)] || 'Equipo';
 let fdBank = (() => { try { return localStorage.getItem('fdBank') || 'grupos'; } catch (e) { return 'grupos'; } })();

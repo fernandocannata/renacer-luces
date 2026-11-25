@@ -153,10 +153,24 @@ class Engine:
         return TYPE_GROUP.get(t, t.capitalize())
 
     ROW_RANK = {"par": 0, "strobo": 1, "dimmer": 2, "cabezal": 3, "humo": 9}
+    LUGARES = ("truss", "piso")
+
+    def _rows(self):
+        """Filas guardadas del escenario: [{name, lugar}] (acepta el formato viejo, solo nombres)."""
+        out = []
+        for r in self.show["settings"].get("filas") or []:
+            if isinstance(r, str):
+                r = {"name": r}
+            name = str(r.get("name", "")).strip()[:40]
+            if name and all(x["name"] != name for x in out):
+                out.append({"name": name, "lugar": r.get("lugar") if r.get("lugar") in self.LUGARES else None})
+        return out
 
     def groups(self):
-        """Grupos en el orden de las filas del escenario (de arriba hacia abajo): [{name, ids, tipo}].
-        Por defecto arriba los pares y abajo los cabezales; el usuario puede reordenarlas."""
+        """Filas del escenario, de arriba hacia abajo: [{name, ids, tipo, lugar}].
+        Cada grupo es una fila: colgada de un truss o apoyada en el piso. Por defecto
+        arriba los pares y abajo los cabezales (el humo, en el piso); el usuario las
+        reordena, agrega truss o pisos vacíos y arrastra equipos de una a otra."""
         out = {}
         for f in self.show["fixtures"]:
             g = self.group_of(f["id"])
@@ -164,17 +178,107 @@ class Engine:
             e = out.setdefault(g, {"name": g, "ids": [], "tipo": prof.get("tipo", "otro")})
             e["ids"].append(f["id"])
         groups = sorted(out.values(), key=lambda g: self.ROW_RANK.get(g["tipo"], 5))
-        rows = self.show["settings"].get("filas") or []
+        rows = self._rows()
+        for r in rows:  # filas creadas a mano todavía vacías
+            if r["name"] not in out:
+                groups.append({"name": r["name"], "ids": [], "tipo": "vacio"})
+        meta = {r["name"]: r for r in rows}
+        for g in groups:
+            lugar = (meta.get(g["name"]) or {}).get("lugar")
+            g["lugar"] = lugar or ("piso" if g["tipo"] == "humo" else "truss")
         if rows:
-            pos = {name: i for i, name in enumerate(rows)}
+            pos = {r["name"]: i for i, r in enumerate(rows)}
             base = {g["name"]: i for i, g in enumerate(groups)}
-            groups.sort(key=lambda g: (g["tipo"] == "humo", pos.get(g["name"], len(rows) + base[g["name"]])))
+            groups.sort(key=lambda g: pos.get(g["name"], len(rows) + base[g["name"]]))
         return groups
 
+    def _save_rows(self, groups):
+        self.show["settings"]["filas"] = [{"name": g["name"], "lugar": g["lugar"]} for g in groups][:40]
+
     def set_rows(self, names):
-        """Orden de las filas de truss en el escenario (nombres de grupo, de arriba hacia abajo)."""
+        """Orden de las filas (nombres de grupo, de arriba hacia abajo)."""
         with self.lock:
-            self.show["settings"]["filas"] = [str(n)[:40] for n in names][:30]
+            cur = {g["name"]: g for g in self.groups()}
+            order = [cur[n] for n in names if n in cur] + [g for n, g in cur.items() if n not in names]
+            self._save_rows(order)
+            self.changed()
+
+    def add_row(self, lugar="truss", name=None):
+        """Agrega un truss (o un lugar en el piso) vacío, al final de los de su tipo."""
+        with self.lock:
+            lugar = lugar if lugar in self.LUGARES else "truss"
+            groups = self.groups()
+            names = {g["name"] for g in groups}
+            if name:
+                name = str(name).strip()[:40]
+                if name in names:
+                    raise ValueError("Ya hay una fila con ese nombre")
+            else:
+                base, k = ("Truss" if lugar == "truss" else "Piso"), 1
+                while "%s %d" % (base, k) in names:
+                    k += 1
+                name = "%s %d" % (base, k)
+            groups.append({"name": name, "ids": [], "tipo": "vacio", "lugar": lugar})
+            self._save_rows(groups)
+            self.changed()
+            return name
+
+    def update_row(self, name, new_name=None, lugar=None):
+        """Cambia el nombre de una fila (y el grupo de sus equipos) o si cuelga o va al piso."""
+        with self.lock:
+            groups = self.groups()
+            g = next((x for x in groups if x["name"] == name), None)
+            if not g:
+                raise ValueError("No existe esa fila")
+            if lugar in self.LUGARES:
+                g["lugar"] = lugar
+            if new_name is not None:
+                new_name = str(new_name).strip()[:40]
+                if not new_name:
+                    raise ValueError("Poné un nombre")
+                if new_name != name:
+                    if any(x["name"] == new_name for x in groups):
+                        raise ValueError("Ya hay una fila con ese nombre")
+                    for fid in g["ids"]:
+                        self.fixture(fid)["grupo"] = new_name
+                    subs = self.show["settings"].get("submasters", {})
+                    if name in subs:
+                        subs[new_name] = subs.pop(name)
+                    self.holds.discard("g:" + name)
+                    g["name"] = new_name
+            self._save_rows(groups)
+            self.changed()
+
+    def remove_row(self, name):
+        with self.lock:
+            groups = self.groups()
+            g = next((x for x in groups if x["name"] == name), None)
+            if not g:
+                return
+            if g["ids"]:
+                raise ValueError("Primero pasá sus equipos a otra fila (arrastrándolos) o borralos en Equipos y direcciones")
+            self._save_rows([x for x in groups if x["name"] != name])
+            self.show["settings"].get("submasters", {}).pop(name, None)
+            self.changed()
+
+    def place_fixture(self, fid, row, before=None):
+        """Pasa un equipo a una fila (truss o piso) y lo deja antes de 'before' (o al final de la fila)."""
+        with self.lock:
+            f = self.fixture(fid)
+            if not f:
+                raise ValueError("Equipo inexistente")
+            groups = self.groups()
+            if not any(g["name"] == row for g in groups):
+                raise ValueError("No existe esa fila")
+            self._save_rows(groups)  # que el orden de las filas no cambie al mover equipos
+            f["grupo"] = row
+            lst = self.show["fixtures"]
+            lst.remove(f)
+            if before and before != fid and self.fixture(before):
+                lst.insert(lst.index(self.fixture(before)), f)
+            else:
+                last = max((i for i, x in enumerate(lst) if self.group_of(x["id"]) == row), default=None)
+                lst.insert(len(lst) if last is None else last + 1, f)
             self.changed()
 
     def set_submaster(self, group, value):
